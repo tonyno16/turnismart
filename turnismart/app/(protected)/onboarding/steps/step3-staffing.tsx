@@ -6,7 +6,6 @@ import { completeStep3, getOnboardingData } from "@/app/actions/onboarding";
 const DAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 const PERIODS = [
   { id: "morning", label: "Mattina" },
-  { id: "afternoon", label: "Pomeriggio" },
   { id: "evening", label: "Sera" },
 ] as const;
 

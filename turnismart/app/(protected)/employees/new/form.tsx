@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { createEmployee } from "@/app/actions/employees";
 
 type Role = { id: string; name: string };
@@ -30,8 +31,14 @@ export function NewEmployeeForm({
     const form = e.currentTarget;
     const fd = new FormData(form);
     startTransition(async () => {
-      const emp = await createEmployee(fd);
-      router.push(`/employees/${emp?.id}`);
+      try {
+        const emp = await createEmployee(fd);
+        toast.success("Dipendente creato con successo");
+        router.push(`/employees/${emp?.id}`);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Errore nella creazione");
+      }
     });
   };
 
@@ -99,6 +106,20 @@ export function NewEmployeeForm({
         </div>
         <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Paga oraria (€)
+          </label>
+          <input
+            name="hourlyRate"
+            type="number"
+            min={0}
+            step={0.01}
+            defaultValue={0}
+            placeholder="0"
+            className="mt-1 rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Tipo contratto
           </label>
           <select
@@ -114,22 +135,26 @@ export function NewEmployeeForm({
           </select>
         </div>
         {roles.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Ruolo
-            </label>
-            <select
-              name="roleId"
-              className="mt-1 rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-            >
-              <option value="">—</option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <>
+            {[1, 2, 3].map((i) => (
+              <div key={i}>
+                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Mansione {i} {i === 1 && "(principale)"}
+                </label>
+                <select
+                  name={`roleId${i}`}
+                  className="mt-1 rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                >
+                  <option value="">—</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </>
         )}
       </div>
       <div className="flex gap-4">

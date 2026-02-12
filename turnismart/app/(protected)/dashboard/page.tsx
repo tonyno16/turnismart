@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireOrganization } from "@/lib/auth";
 import { getDashboardStats, getWeekOverview, getPendingAlerts } from "@/lib/dashboard";
-import { getWeekStart, getWeekSchedule } from "@/lib/schedules";
+import { getWeekStart, getWeekSchedule, getStaffingCoverage } from "@/lib/schedules";
 import { format, parseISO, addDays } from "date-fns";
 import { it } from "date-fns/locale";
 import { DashboardActions } from "./dashboard-actions";
@@ -9,14 +9,19 @@ import { DashboardActions } from "./dashboard-actions";
 const DAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 
 export default async function DashboardPage() {
-  const { organization } = await requireOrganization();
+  const { user, organization } = await requireOrganization();
   const weekStart = getWeekStart(new Date().toISOString().slice(0, 10));
 
-  const [{ schedule }, stats, overview, alerts] = await Promise.all([
+  // Compute coverage once and share with both stats and overview
+  const [{ schedule }, coverage, alerts] = await Promise.all([
     getWeekSchedule(organization.id, weekStart),
-    getDashboardStats(organization.id, weekStart),
-    getWeekOverview(organization.id, weekStart),
+    getStaffingCoverage(organization.id, weekStart),
     getPendingAlerts(organization.id, weekStart),
+  ]);
+
+  const [stats, overview] = await Promise.all([
+    getDashboardStats(organization.id, weekStart, coverage),
+    getWeekOverview(organization.id, weekStart, coverage),
   ]);
 
 
@@ -161,11 +166,10 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900/50">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
-            Avvisi
-          </h2>
+      <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900/50">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
+          Avvisi
+        </h2>
           {alerts.length === 0 ? (
             <p className="mt-4 text-sm text-zinc-500">
               Nessun avviso in sospeso.
@@ -185,7 +189,7 @@ export default async function DashboardPage() {
                   </div>
                   {a.type === "shift_request" && (
                     <Link
-                      href="/my-requests"
+                      href={user.role === "owner" || user.role === "manager" ? "/requests" : "/my-requests"}
                       className="text-sm text-[hsl(var(--primary))] hover:underline"
                     >
                       Gestisci
@@ -204,33 +208,6 @@ export default async function DashboardPage() {
             </ul>
           )}
         </div>
-
-        <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900/50">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
-            Azioni rapide
-          </h2>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Link
-              href="/schedule"
-              className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-            >
-              Vai alla programmazione
-            </Link>
-            <Link
-              href="/employees"
-              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-600"
-            >
-              Gestisci dipendenti
-            </Link>
-            <Link
-              href="/locations"
-              className="rounded-lg border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-600"
-            >
-              Gestisci sedi
-            </Link>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

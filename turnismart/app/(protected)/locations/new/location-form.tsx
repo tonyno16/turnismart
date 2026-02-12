@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 type LocationFormProps = {
   action: (formData: FormData) => Promise<unknown>;
@@ -19,9 +20,14 @@ export function LocationForm({
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
     startTransition(async () => {
-      await action(formData);
-      router.push("/locations");
-      router.refresh();
+      try {
+        await action(formData);
+        toast.success("Sede creata con successo");
+        router.push("/locations");
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Errore nel salvataggio");
+      }
     });
   };
 

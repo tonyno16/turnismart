@@ -1,5 +1,6 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
 
 type Employee = { id: string; first_name: string; last_name: string; weekly_hours: number };
@@ -16,7 +17,7 @@ function parseTimeMinutes(t: string): number {
   return (h ?? 0) * 60 + (m ?? 0);
 }
 
-function EmployeeCard({
+const EmployeeCard = memo(function EmployeeCard({
   employee,
   weekMinutes,
   weeklyHours,
@@ -59,9 +60,9 @@ function EmployeeCard({
       </div>
     </div>
   );
-}
+});
 
-export function EmployeeSidebar({
+export const EmployeeSidebar = memo(function EmployeeSidebar({
   employees,
   shifts,
   weekStart,
@@ -70,13 +71,16 @@ export function EmployeeSidebar({
   shifts: Shift[];
   weekStart: string;
 }) {
-  const empMinutes = new Map<string, number>();
-  for (const s of shifts) {
-    if (s.employee_id && s.status === "active") {
-      const mins = parseTimeMinutes(s.end_time) - parseTimeMinutes(s.start_time);
-      empMinutes.set(s.employee_id, (empMinutes.get(s.employee_id) ?? 0) + mins);
+  const empMinutes = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of shifts) {
+      if (s.employee_id && s.status === "active") {
+        const mins = parseTimeMinutes(s.end_time) - parseTimeMinutes(s.start_time);
+        map.set(s.employee_id, (map.get(s.employee_id) ?? 0) + mins);
+      }
     }
-  }
+    return map;
+  }, [shifts]);
 
   return (
     <div className="space-y-2">
@@ -98,4 +102,4 @@ export function EmployeeSidebar({
       </div>
     </div>
   );
-}
+});

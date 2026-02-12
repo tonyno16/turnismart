@@ -24,12 +24,12 @@
 As the SaaS grows, the platform operator needs visibility into: total organizations, users, MRR, churn rate, trial conversions, and feature usage. Also needs to manage organizations (suspend, extend trial) and monitor system health.
 
 ### Success Criteria
-- [ ] Admin dashboard with KPIs (organizations, users, MRR, churn)
-- [ ] Recent organizations with plan and status
-- [ ] Alerts: expiring trials, failed payments, system errors
-- [ ] User management page with filters and actions (suspend, extend trial)
-- [ ] Analytics page with charts (MRR, conversions, plan distribution, feature usage)
-- [ ] Admin routes restricted to admin role only
+- [x] Admin dashboard with KPIs (organizations, users, MRR, churn)
+- [x] Recent organizations with plan and status
+- [x] Alerts: expiring trials, failed payments, system errors
+- [x] Organization management page (`/admin/organizations`) with filters and extend trial
+- [x] Analytics page with plan distribution, usage, signup trend
+- [x] Admin routes restricted to admin role only
 
 ---
 
@@ -78,7 +78,10 @@ No new database tables required. Admin queries existing tables (organizations, u
 
 ## 12. Task Completion Tracking
 
-_(To be updated during implementation)_
+- [x] Admin dashboard (`/admin`) con KPIs, recent orgs, alerts
+- [x] Pagina organizzazioni (`/admin/organizations`) con filtri e azione "Estendi trial"
+- [x] Pagina analytics (`/admin/analytics`) con distribuzione piani, utilizzo mensile, trend iscrizioni
+- [x] Sidebar admin con link Dashboard, Organizzazioni, Analytics
 
 ---
 

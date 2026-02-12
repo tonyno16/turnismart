@@ -223,17 +223,19 @@ Organization (Ristorante Rossi S.r.l.)
 ---
 
 #### `employee_roles`
-**Purpose:** Relazione molti-a-molti tra dipendenti e mansioni (un dipendente puo essere cameriere E lavapiatti).
+**Purpose:** Fino a 3 mansioni per dipendente, in ordine di priorità (1=principale, 2, 3).
 
 - `id` - uuid, PK
 - `employee_id` - uuid, FK → employees(id), ON DELETE CASCADE
 - `role_id` - uuid, FK → roles(id), ON DELETE CASCADE
-- `is_primary` - boolean, default false (mansione principale)
+- `priority` - integer, default 1 (1..3, 1=principale)
 - `created_at` - timestamptz, default now()
 
 **Indexes:**
 - UNIQUE (`employee_id`, `role_id`)
 - `employee_id` (per "mansioni di questo dipendente")
+
+**Constraint:** max 3 righe per `employee_id`, `priority` tra 1 e 3.
 
 ---
 

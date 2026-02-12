@@ -2,6 +2,7 @@
 
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { addDays, subDays, format, parseISO } from "date-fns";
 import { db } from "@/lib/db";
 import {
   schedules,
@@ -18,6 +19,12 @@ import {
   validateShiftAssignment,
   type ValidationConflict,
 } from "@/lib/schedule-validation";
+
+export type ReplicateWeekResult = {
+  replicated: number;
+  skipped: number;
+  total: number;
+};
 
 export type CreateShiftResult =
   | { ok: true }
@@ -202,6 +209,113 @@ export async function markSickLeave(shiftId: string) {
     .set({ status: "sick_leave", updated_at: new Date() })
     .where(eq(shifts.id, shiftId));
   revalidatePath("/schedule");
+}
+
+export async function replicatePreviousWeek(
+  scheduleId: string,
+  targetWeekStart: string
+): Promise<ReplicateWeekResult> {
+  const { organization } = await requireOrganization();
+  const [targetSched] = await db
+    .select()
+    .from(schedules)
+    .where(
+      and(
+        eq(schedules.id, scheduleId),
+        eq(schedules.organization_id, organization.id)
+      )
+    )
+    .limit(1);
+  if (!targetSched) throw new Error("Programmazione non trovata");
+
+  const prevWeekStart = format(
+    subDays(parseISO(targetWeekStart), 7),
+    "yyyy-MM-dd"
+  );
+  const [prevSched] = await db
+    .select()
+    .from(schedules)
+    .where(
+      and(
+        eq(schedules.organization_id, organization.id),
+        eq(schedules.week_start_date, prevWeekStart)
+      )
+    )
+    .limit(1);
+  if (!prevSched) throw new Error("Nessuna settimana precedente trovata");
+
+  const prevShifts = await db
+    .select()
+    .from(shifts)
+    .where(
+      and(
+        eq(shifts.schedule_id, prevSched.id),
+        eq(shifts.status, "active")
+      )
+    );
+
+  const activeEmployeeIds = new Set(
+    (
+      await db
+        .select({ id: employees.id })
+        .from(employees)
+        .where(
+          and(
+            eq(employees.organization_id, organization.id),
+            eq(employees.is_active, true)
+          )
+        )
+    ).map((e) => e.id)
+  );
+
+  let replicated = 0;
+  let skipped = 0;
+
+  const targetStart = parseISO(targetWeekStart);
+  for (const s of prevShifts) {
+    if (!activeEmployeeIds.has(s.employee_id)) {
+      skipped++;
+      continue;
+    }
+    const dayOffset =
+      (parseISO(s.date).getTime() - parseISO(prevWeekStart).getTime()) /
+      (24 * 60 * 60 * 1000);
+    const newDate = format(addDays(targetStart, dayOffset), "yyyy-MM-dd");
+
+    const conflict = await validateShiftAssignment({
+      employeeId: s.employee_id,
+      organizationId: organization.id,
+      scheduleId,
+      locationId: s.location_id,
+      roleId: s.role_id,
+      date: newDate,
+      startTime: s.start_time,
+      endTime: s.end_time,
+      weekStart: targetWeekStart,
+    });
+    if (conflict) {
+      skipped++;
+      continue;
+    }
+
+    await db.insert(shifts).values({
+      schedule_id: scheduleId,
+      organization_id: organization.id,
+      location_id: s.location_id,
+      employee_id: s.employee_id,
+      role_id: s.role_id,
+      date: newDate,
+      start_time: s.start_time,
+      end_time: s.end_time,
+      break_minutes: s.break_minutes,
+      is_auto_generated: false,
+      status: "active",
+    });
+    replicated++;
+  }
+
+  revalidatePath("/schedule");
+  return { replicated, skipped, total: prevShifts.length };
 }
 
 export async function publishSchedule(scheduleId: string) {

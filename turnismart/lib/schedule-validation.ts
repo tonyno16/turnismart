@@ -208,7 +208,7 @@ export async function checkAvailability(
   shiftPeriod: string
 ): Promise<ValidationConflict | null> {
   const validPeriod =
-    ["morning", "afternoon", "evening"].includes(shiftPeriod) ? shiftPeriod : "morning";
+    ["morning", "evening"].includes(shiftPeriod) ? shiftPeriod : "morning";
   const av = await db
     .select()
     .from(employeeAvailability)
@@ -274,57 +274,55 @@ export async function validateShiftAssignment(params: {
       (24 * 60 * 60 * 1000)
   );
   const period =
-    params.startTime >= "18:00"
+    params.startTime >= "14:00"
       ? "evening"
-      : params.startTime >= "13:00"
-      ? "afternoon"
       : "morning";
 
-  const checks = [
-    () =>
-      checkOverlap(
-        params.employeeId,
-        params.date,
-        params.startTime,
-        params.endTime,
-        params.excludeShiftId,
-        params.scheduleId
-      ),
-    () =>
-      checkMaxWeeklyHours(
-        params.employeeId,
-        params.weekStart,
-        params.date,
-        params.startTime,
-        params.endTime,
-        params.excludeShiftId,
-        params.scheduleId
-      ),
-    () =>
-      checkMinRestPeriod(
-        params.employeeId,
-        params.date,
-        params.startTime,
-        params.endTime,
-        params.excludeShiftId,
-        params.scheduleId
-      ),
-    () =>
-      checkIncompatibility(
-        params.employeeId,
-        params.locationId,
-        params.date,
-        params.startTime,
-        params.endTime,
-        params.scheduleId
-      ),
-    () => checkAvailability(params.employeeId, dayOfWeek, period),
-    () => checkTimeOff(params.employeeId, params.date),
-  ];
-  for (const fn of checks) {
-    const conflict = await fn();
-    if (conflict) return conflict;
-  }
-  return null;
+  // Batch 1: fast, independent checks in parallel
+  const [overlapResult, availResult, timeOffResult] = await Promise.all([
+    checkOverlap(
+      params.employeeId,
+      params.date,
+      params.startTime,
+      params.endTime,
+      params.excludeShiftId,
+      params.scheduleId
+    ),
+    checkAvailability(params.employeeId, dayOfWeek, period),
+    checkTimeOff(params.employeeId, params.date),
+  ]);
+  if (overlapResult) return overlapResult;
+  if (availResult) return availResult;
+  if (timeOffResult) return timeOffResult;
+
+  // Batch 2: heavier checks, only if batch 1 passes
+  const [maxHoursResult, restResult, incompatResult] = await Promise.all([
+    checkMaxWeeklyHours(
+      params.employeeId,
+      params.weekStart,
+      params.date,
+      params.startTime,
+      params.endTime,
+      params.excludeShiftId,
+      params.scheduleId
+    ),
+    checkMinRestPeriod(
+      params.employeeId,
+      params.date,
+      params.startTime,
+      params.endTime,
+      params.excludeShiftId,
+      params.scheduleId
+    ),
+    checkIncompatibility(
+      params.employeeId,
+      params.locationId,
+      params.date,
+      params.startTime,
+      params.endTime,
+      params.scheduleId
+    ),
+  ]);
+  return maxHoursResult ?? restResult ?? incompatResult ?? null;
 }
 

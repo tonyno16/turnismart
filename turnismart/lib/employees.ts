@@ -1,4 +1,4 @@
-import { eq, and, or, inArray } from "drizzle-orm";
+import { eq, and, or, inArray, ilike, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   employees,
@@ -19,30 +19,29 @@ export async function getEmployeesByOrganization(
   organizationId: string,
   filters?: EmployeeFilters
 ) {
+  const conditions = [eq(employees.organization_id, organizationId)];
+  if (filters?.isActive !== undefined) {
+    conditions.push(eq(employees.is_active, filters.isActive));
+  }
+  if (filters?.search) {
+    const pattern = `%${filters.search}%`;
+    conditions.push(
+      or(
+        ilike(employees.first_name, pattern),
+        ilike(employees.last_name, pattern),
+        ilike(employees.email, pattern),
+        ilike(employees.phone, pattern)
+      )!
+    );
+  }
+
   const list = await db
     .select()
     .from(employees)
-    .where(
-      filters?.isActive !== undefined
-        ? and(
-            eq(employees.organization_id, organizationId),
-            eq(employees.is_active, filters.isActive)
-          )
-        : eq(employees.organization_id, organizationId)
-    )
+    .where(and(...conditions))
     .orderBy(employees.last_name, employees.first_name);
 
   let filtered = list;
-  if (filters?.search) {
-    const s = filters.search.toLowerCase();
-    filtered = filtered.filter(
-      (e) =>
-        e.first_name.toLowerCase().includes(s) ||
-        e.last_name.toLowerCase().includes(s) ||
-        (e.email?.toLowerCase().includes(s) ?? false) ||
-        (e.phone?.includes(filters.search ?? "") ?? false)
-    );
-  }
   if (filters?.roleId) {
     const withRole = await db
       .select({ employee_id: employeeRoles.employee_id })
@@ -68,11 +67,13 @@ export async function getEmployeeDetail(employeeId: string) {
       id: employeeRoles.id,
       role_id: roles.id,
       role_name: roles.name,
-      is_primary: employeeRoles.is_primary,
+      priority: employeeRoles.priority,
+      hourly_rate: employeeRoles.hourly_rate,
     })
     .from(employeeRoles)
     .innerJoin(roles, eq(employeeRoles.role_id, roles.id))
-    .where(eq(employeeRoles.employee_id, employeeId));
+    .where(eq(employeeRoles.employee_id, employeeId))
+    .orderBy(employeeRoles.priority);
 
   const availability = await db
     .select()

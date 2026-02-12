@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireOrganization } from "@/lib/auth";
 import { getEmployeesByOrganization } from "@/lib/employees";
 import { getOnboardingData } from "@/app/actions/onboarding";
+import { EmployeesPageClient } from "./employees-page-client";
 
 export default async function EmployeesPage({
   searchParams,
@@ -23,12 +24,15 @@ export default async function EmployeesPage({
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
           Dipendenti
         </h1>
-        <Link
-          href="/employees/new"
-          className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-        >
-          + Nuovo dipendente
-        </Link>
+        <div className="flex gap-2">
+          <EmployeesPageClient />
+          <Link
+            href="/employees/new"
+            className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+          >
+            + Nuovo dipendente
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-4">

@@ -15,7 +15,17 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "TurniSmart - Scheduling del personale con AI",
-  description: "Piattaforma SaaS per gestione orari multi-sede",
+  description:
+    "Piattaforma SaaS per gestione orari multi-sede. Genera orari con AI, notifiche WhatsApp, report per commercialista. Prova gratuita.",
+  keywords: ["turni", "orari", "scheduling", "AI", "personale", "ristorante", "retail"],
+  authors: [{ name: "TurniSmart" }],
+  manifest: "/manifest.json",
+  openGraph: {
+    title: "TurniSmart - Scheduling del personale con AI",
+    description:
+      "Piattaforma SaaS per gestione orari multi-sede. Genera orari con AI, notifiche WhatsApp, report per commercialista.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
@@ -24,9 +34,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="it">
+    <html lang="it" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
       >
         {children}
         <Toaster />

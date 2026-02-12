@@ -24,14 +24,14 @@
 Owners need a profile page showing account info and subscription status (queried from Stripe API in real-time), usage stats with quota progress bars, and settings pages to configure work rules, notification channels, and report preferences.
 
 ### Success Criteria
-- [ ] Database table: usage_tracking created
-- [ ] Profile page with account info, subscription status (from Stripe API), usage stats
-- [ ] "Gestisci Abbonamento" → Stripe Portal redirect
-- [ ] Usage tracking helpers with quota checks
-- [ ] Quota checks integrated into: createLocation, createEmployee, AI generation, report generation
-- [ ] Settings hub with work rules and notification preferences pages
-- [ ] Work rules: rest hours, max consecutive days, overtime threshold
-- [ ] Notification settings: per-event channel toggles
+- [x] Database table: usage_tracking created
+- [x] Profile page with account info, subscription status (from Stripe API), usage stats
+- [x] "Gestisci Abbonamento" → Stripe Portal redirect
+- [x] Usage tracking helpers with quota checks
+- [x] Quota checks integrated into: createLocation, createEmployee, AI generation, report generation
+- [x] Settings hub with work rules and notification preferences pages
+- [x] Work rules: rest hours, max consecutive days, overtime threshold
+- [x] Notification settings: per-event channel toggles
 
 ---
 
@@ -48,54 +48,61 @@ Owners need a profile page showing account info and subscription status (queried
 ## 8. API & Backend Changes
 
 ### Database Queries
-- [ ] `lib/usage.ts`:
+- [x] `lib/usage.ts`:
   - getOrCreateMonthlyUsage(orgId)
   - incrementUsage(orgId, field)
   - checkQuota(orgId, resource) → query Stripe plan + compare with usage
 
 ### Integration Points
-- [ ] Quota checks in: createLocation, createEmployee, AI generation, report generation
-- [ ] Stripe API: query subscription status with stripe_customer_id
-- [ ] Stripe Portal URL generation for "Gestisci Abbonamento"
+- [x] Quota checks in: createLocation, createEmployee, AI generation, report generation
+- [x] Stripe API: query subscription status with stripe_customer_id
+- [x] Stripe Portal URL generation for "Gestisci Abbonamento"
 
 ---
 
 ## 9. Frontend Changes
 
 ### Profile Page
-- [ ] `app/(protected)/profile/page.tsx` - Account, subscription, usage
+- [x] `app/(protected)/profile/page.tsx` - Account, subscription, usage
 
 ### Settings Pages
-- [ ] `app/(protected)/settings/page.tsx` - Settings hub
-- [ ] `app/(protected)/settings/work-rules/page.tsx` - Work rules config
-- [ ] `app/(protected)/settings/notifications/page.tsx` - Notification channel toggles
+- [x] `app/(protected)/settings/page.tsx` - Settings hub
+- [x] `app/(protected)/settings/work-rules/page.tsx` - Work rules config
+- [x] `app/(protected)/settings/notifications/page.tsx` - Notification channel toggles
 
 ---
 
 ## 11. Implementation Plan
 
 ### Phase 1: Database & Usage Tracking
-- [ ] **Task 1.1:** Create usage_tracking schema
-- [ ] **Task 1.2:** Generate + apply migration (with down migration)
-- [ ] **Task 1.3:** Create `lib/usage.ts` helpers
-- [ ] **Task 1.4:** Integrate quota checks into existing server actions
+- [x] **Task 1.1:** Create usage_tracking schema
+- [x] **Task 1.2:** Generate + apply migration (with down migration)
+- [x] **Task 1.3:** Create `lib/usage.ts` helpers
+- [x] **Task 1.4:** Integrate quota checks into existing server actions
 
 ### Phase 2: Profile Page
-- [ ] **Task 2.1:** Build profile page with account card
-- [ ] **Task 2.2:** Build subscription card (Stripe API query)
-- [ ] **Task 2.3:** Build usage card with progress bars
-- [ ] **Task 2.4:** Implement Stripe Portal redirect
+- [x] **Task 2.1:** Build profile page with account card
+- [x] **Task 2.2:** Build subscription card (Stripe API query)
+- [x] **Task 2.3:** Build usage card with progress bars
+- [x] **Task 2.4:** Implement Stripe Portal redirect
 
 ### Phase 3: Settings Pages
-- [ ] **Task 3.1:** Build settings hub
-- [ ] **Task 3.2:** Build work rules page
-- [ ] **Task 3.3:** Build notification settings page
+- [x] **Task 3.1:** Build settings hub
+- [x] **Task 3.2:** Build work rules page
+- [x] **Task 3.3:** Build notification settings page
 
 ---
 
 ## 12. Task Completion Tracking
 
-_(To be updated during implementation)_
+**Status: ✅ Completato**
+
+- Schema usage_tracking + migration
+- lib/usage.ts + lib/stripe.ts
+- Profile page: account, subscription, usage con progress bars
+- Stripe Portal redirect (Gestisci abbonamento)
+- Settings hub + work-rules + notifications
+- Quota checks in createLocation, createEmployee, AI generation, report generation
 
 ---
 

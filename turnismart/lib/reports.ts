@@ -11,6 +11,7 @@ import {
   roles,
   italianHolidays,
   employeeTimeOff,
+  employeeRoles,
 } from "@/drizzle/schema";
 import { createServiceClient } from "./supabase/service";
 
@@ -100,7 +101,8 @@ export async function aggregateMonthlyData(
       employee_id: shifts.employee_id,
       employee_first: employees.first_name,
       employee_last: employees.last_name,
-      hourly_rate: employees.hourly_rate,
+      emp_hourly_rate: employees.hourly_rate,
+      role_hourly_rate: employeeRoles.hourly_rate,
       overtime_rate: employees.overtime_rate,
       holiday_rate: employees.holiday_rate,
       weekly_hours: employees.weekly_hours,
@@ -113,6 +115,13 @@ export async function aggregateMonthlyData(
     })
     .from(shifts)
     .innerJoin(employees, eq(shifts.employee_id, employees.id))
+    .leftJoin(
+      employeeRoles,
+      and(
+        eq(shifts.employee_id, employeeRoles.employee_id),
+        eq(shifts.role_id, employeeRoles.role_id)
+      )
+    )
     .innerJoin(locations, eq(shifts.location_id, locations.id))
     .where(
       and(
@@ -145,7 +154,7 @@ export async function aggregateMonthlyData(
       s.end_time,
       s.break_minutes ?? 0
     );
-    const hourlyRate = Number(s.hourly_rate ?? 0);
+    const hourlyRate = Number(s.role_hourly_rate ?? s.emp_hourly_rate ?? 0);
     const overtimeRate = Number(s.overtime_rate ?? hourlyRate);
     const holidayRate = Number(s.holiday_rate ?? hourlyRate);
 
@@ -212,10 +221,11 @@ export async function aggregateMonthlyData(
       emp.ordinary + emp.overtime + emp.holiday +
       (sickByEmp.get(empId) ?? 0) +
       (vacByEmp.get(empId) ?? 0);
-    const totalCost =
-      emp.ordinary * emp.hourlyRate +
-      emp.overtime * emp.overtimeRate +
-      emp.holiday * emp.holidayRate;
+    const totalCost = [...emp.locCost.values()].reduce((a, c) => a + c, 0);
+
+    const workedHrs = emp.ordinary + emp.overtime + emp.holiday;
+    const displayHourlyRate =
+      workedHrs > 0 ? totalCost / workedHrs : emp.hourlyRate;
 
     byEmployee.push({
       employeeId: empId,
@@ -226,7 +236,7 @@ export async function aggregateMonthlyData(
       sickHours: Math.round((sickByEmp.get(empId) ?? 0) * 100) / 100,
       vacationHours: Math.round((vacByEmp.get(empId) ?? 0) * 100) / 100,
       totalHours: Math.round(totalHrs * 100) / 100,
-      hourlyRate: emp.hourlyRate,
+      hourlyRate: Math.round(displayHourlyRate * 100) / 100,
       totalCost: Math.round(totalCost * 100) / 100,
     });
 

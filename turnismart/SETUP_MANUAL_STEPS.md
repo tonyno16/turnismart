@@ -25,13 +25,29 @@ Guida per completare la configurazione manuale di Supabase, Trigger.dev, Stripe,
 3. Copia l’URI e sostituisci `[YOUR-PASSWORD]` con la password del DB → `DATABASE_URL`
 
 ### 1.4 Auth
+
+#### Email (obbligatorio)
 1. **Authentication** → **Providers**
-2. Attiva **Email** (email/password)
-3. Attiva **Google** se serve OAuth (aggiungi Client ID e Secret da Google Cloud Console)
+2. Attiva **Email** (email/password) – già attivo di default
+
+#### Google OAuth (per "Continua con Google")
+1. **Google Cloud Console** → [console.cloud.google.com](https://console.cloud.google.com)
+2. Crea un progetto (es. `turnismart-auth`) oppure usa uno esistente
+3. **APIs & Services** → **OAuth consent screen** → Configura (External, compila nome app e email)
+4. **APIs & Services** → **Credentials** → **Create Credentials** → **OAuth client ID**
+5. Tipo: **Web application** | Nome: `TurniSmart Auth`
+6. **Authorized JavaScript origins:** `http://localhost:3000` (aggiungi il tuo dominio in produzione)
+7. **Authorized redirect URIs:** copia da Supabase → **Authentication** → **Providers** → **Google** → abilita il provider e copia il **Callback URL** (es. `https://xxxx.supabase.co/auth/v1/callback`)
+8. Copia **Client ID** e **Client Secret** nel provider Google di Supabase
+9. Clicca **Save** in Supabase
+
+**Risoluzione problemi OAuth:**
+- `redirect_uri_mismatch` → L’URI di redirect in Google deve coincidere esattamente con quello di Supabase
+- `unauthorized_client` → Verifica Client ID e Secret in Supabase, controlla che il consent screen sia configurato
 
 ### 1.5 Storage
-1. **Storage** → **New bucket**
-2. Crea `reports` (obbligatorio per i report mensili), `imports`, `avatars`
+1. **Opzione A** (consigliato): `cd turnismart && npm run setup:storage` crea i bucket reports, imports, avatars
+2. **Opzione B**: Storage → New bucket → Crea manualmente `reports` (pubblico), `imports`, `avatars`
 3. Per `reports`: rendi il bucket pubblico per le letture, oppure usa signed URLs (l’app usa `getPublicUrl` per i download)
 
 ### 1.6 Email (Resend)
@@ -152,6 +168,12 @@ Dopo ogni servizio, aggiungi o aggiorna le variabili in `turnismart/.env.local`:
 | `TWILIO_WHATSAPP_FROM` | Twilio |
 | `RESEND_API_KEY` | Resend |
 | `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` (o il tuo dominio) |
+| `CRON_SECRET` | (opzionale) Segreto per proteggere l'endpoint `/api/cron/monthly-report` |
+
+### 6.1 Vercel – CRON_SECRET (per report automatici)
+1. **Vercel** → tuo progetto → **Settings** → **Environment Variables**
+2. Aggiungi `CRON_SECRET` (es. stringa casuale) per Production
+3. In **Cron Jobs** (Vercel Pro) oppure tramite external cron (cron-job.org), configura una chiamata GET a `https://tuodominio.com/api/cron/monthly-report` con header `Authorization: Bearer <CRON_SECRET>`
 
 ---
 
@@ -171,3 +193,24 @@ Dopo ogni servizio, aggiungi o aggiorna le variabili in `turnismart/.env.local`:
 4. **OpenAI** (API key da platform.openai.com)
 5. **Resend** (email)
 6. **Twilio** (WhatsApp, anche più avanti)
+
+---
+
+## 8. Security Checklist (Phase 14)
+
+### Auth
+- **Supabase Auth** gestisce rate limiting (sign-up, login, reset password)
+- **Middleware** reindirizza utenti non autenticati
+- **API routes** `/api/*` esclusi dal middleware; `/api/auth/login` è pubblico (necessario per login)
+
+### Database
+- **RLS** attivo su organizations, users, invitations, accountant_clients (migrations 0001, 0003, 0010, 0011)
+- **Drizzle** usa connessione diretta; l’autorizzazione avviene a livello applicativo (requireUser, getCurrentUser)
+
+### Webhook
+- **Stripe** e **Trigger** verificano le firme (webhook secrets)
+
+### Produzione
+- Proteggere `/api/cron/monthly-report` con `CRON_SECRET`
+- Nessuna chiave sensibile in `NEXT_PUBLIC_*`
+

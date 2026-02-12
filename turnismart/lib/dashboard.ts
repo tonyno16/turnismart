@@ -21,7 +21,8 @@ export type DashboardStats = {
 
 export async function getDashboardStats(
   organizationId: string,
-  weekStart?: string
+  weekStart?: string,
+  preloadedCoverage?: Awaited<ReturnType<typeof getStaffingCoverage>>
 ): Promise<DashboardStats> {
   const week =
     weekStart ?? format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
@@ -53,7 +54,7 @@ export async function getDashboardStats(
   let estimatedCost = 0;
 
   if (sched) {
-    const coverage = await getStaffingCoverage(
+    const coverage = preloadedCoverage ?? await getStaffingCoverage(
       organizationId,
       week,
       sched.id
@@ -113,9 +114,10 @@ export type WeekOverviewCell = {
 
 export async function getWeekOverview(
   organizationId: string,
-  weekStart: string
+  weekStart: string,
+  preloadedCoverage?: Awaited<ReturnType<typeof getStaffingCoverage>>
 ): Promise<WeekOverviewCell[]> {
-  const coverage = await getStaffingCoverage(organizationId, weekStart);
+  const coverage = preloadedCoverage ?? await getStaffingCoverage(organizationId, weekStart);
   const weekStartDate = parseISO(weekStart);
 
   const byLocationDay = new Map<

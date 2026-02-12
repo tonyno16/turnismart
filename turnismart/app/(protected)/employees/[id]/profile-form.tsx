@@ -12,6 +12,7 @@ type Employee = {
   phone: string | null;
   weekly_hours: number;
   contract_type: string;
+  hourly_rate: string;
   preferred_location_id: string | null;
   is_active: boolean;
   notes: string | null;
@@ -45,6 +46,7 @@ export function EmployeeProfileForm({
     phone: employee.phone ?? "",
     weeklyHours: String(employee.weekly_hours),
     contractType: employee.contract_type,
+    hourlyRate: employee.hourly_rate ?? "0",
     preferredLocationId: employee.preferred_location_id ?? "",
     notes: employee.notes ?? "",
   });
@@ -58,6 +60,7 @@ export function EmployeeProfileForm({
     fd.set("phone", formData.phone);
     fd.set("weeklyHours", formData.weeklyHours);
     fd.set("contractType", formData.contractType);
+    fd.set("hourlyRate", formData.hourlyRate);
     fd.set("preferredLocationId", formData.preferredLocationId || "");
     fd.set("notes", formData.notes);
     startTransition(async () => {
@@ -166,6 +169,22 @@ export function EmployeeProfileForm({
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Paga oraria (€)
+          </label>
+          <input
+            type="number"
+            min={0}
+            step={0.01}
+            value={formData.hourlyRate}
+            onChange={(e) =>
+              setFormData((d) => ({ ...d, hourlyRate: e.target.value }))
+            }
+            placeholder="0"
+            className="mt-1 rounded-lg border border-zinc-300 px-3 py-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">

@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, inArray } from "drizzle-orm";
 import { format, parseISO } from "date-fns";
 import { db } from "@/lib/db";
 import {
@@ -44,10 +44,8 @@ export async function findBestSubstitutes(params: {
       (24 * 60 * 60 * 1000)
   );
   const period =
-    params.startTime >= "18:00"
+    params.startTime >= "14:00"
       ? "evening"
-      : params.startTime >= "13:00"
-      ? "afternoon"
       : "morning";
 
   const empRolesRows = await db
@@ -80,12 +78,32 @@ export async function findBestSubstitutes(params: {
   );
   if (candidates.length === 0) return [];
 
-  const avail = await db.select().from(employeeAvailability);
-  const inc = await db.select().from(employeeIncompatibilities);
+  const candidateIds = candidates.map((c) => c.id);
+
+  const avail = await db
+    .select()
+    .from(employeeAvailability)
+    .where(inArray(employeeAvailability.employee_id, candidateIds));
+
+  const inc = await db
+    .select()
+    .from(employeeIncompatibilities)
+    .where(
+      or(
+        inArray(employeeIncompatibilities.employee_a_id, candidateIds),
+        inArray(employeeIncompatibilities.employee_b_id, candidateIds)
+      )
+    );
+
   const to = await db
     .select()
     .from(employeeTimeOff)
-    .where(eq(employeeTimeOff.status, "approved"));
+    .where(
+      and(
+        eq(employeeTimeOff.status, "approved"),
+        inArray(employeeTimeOff.employee_id, candidateIds)
+      )
+    );
 
   const incompatibleIds = new Set(
     inc

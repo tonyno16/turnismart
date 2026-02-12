@@ -26,6 +26,9 @@ export default async function ReportsPage() {
       <p className="text-sm text-zinc-600 dark:text-zinc-400">
         Genera report PDF, CSV e Excel con ore e costi per dipendente e sede.
         I report vengono salvati e possono essere scaricati dal commercialista.
+        <Link href="/settings/accountant" className="ml-1 text-[hsl(var(--primary))] hover:underline">
+          Collega un commercialista
+        </Link>
       </p>
 
       <div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/50">

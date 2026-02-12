@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireOrganization } from "@/lib/auth";
 import { getWeekSchedule } from "@/lib/schedules";
+import { checkQuota, incrementUsage } from "@/lib/usage";
 import {
   collectSchedulingConstraints,
   generateScheduleWithAI,
@@ -20,6 +21,8 @@ export async function generateScheduleWithAIAction(
 ): Promise<GenerateResult> {
   try {
     const { organization } = await requireOrganization();
+    const quota = await checkQuota(organization.id, "ai_generations");
+    if (!quota.allowed) return { ok: false, error: quota.message ?? "Limite generazioni AI mensili raggiunto" };
     const { schedule } = await getWeekSchedule(organization.id, weekStart);
 
     const constraints = await collectSchedulingConstraints(
@@ -54,6 +57,8 @@ export async function generateScheduleWithAIAction(
       weekStart,
       generated
     );
+
+    await incrementUsage(organization.id, "ai_generations_count");
 
     revalidatePath("/schedule");
     revalidatePath("/dashboard");

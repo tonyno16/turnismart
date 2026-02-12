@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo, useCallback, memo } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   DndContext,
@@ -12,7 +13,9 @@ import {
 } from "@dnd-kit/core";
 import { format, addWeeks, addDays, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
+import { toast } from "sonner";
 import { createShift, deleteShift, publishSchedule } from "@/app/actions/shifts";
+import { ReplicateWeekModal } from "@/components/schedule/replicate-week-modal";
 import { EmployeeSidebar } from "@/components/schedule/employee-sidebar";
 import { ConflictPopup } from "@/components/schedule/conflict-popup";
 import { AIGenerationModal } from "@/components/schedule/ai-generation-modal";
@@ -21,7 +24,6 @@ import { SickLeavePopup } from "@/components/schedule/sick-leave-popup";
 const DAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 const PERIODS = [
   { id: "morning", label: "M" },
-  { id: "afternoon", label: "P" },
   { id: "evening", label: "S" },
 ];
 
@@ -86,9 +88,34 @@ export function SchedulerClient({
     employeeId: string;
   } | null>(null);
   const [showAIModal, setShowAIModal] = useState(false);
+  const [showReplicateModal, setShowReplicateModal] = useState(false);
   const [sickLeaveShift, setSickLeaveShift] = useState<Shift | null>(null);
 
   const view = "location";
+
+  // Pre-index shifts by cell key for O(1) lookup
+  const shiftIndex = useMemo(() => {
+    const index = new Map<string, Shift[]>();
+    for (const s of shifts) {
+      if (s.status !== "active") continue;
+      const period = s.start_time >= "14:00" ? "evening" : "morning";
+      const key = `${s.location_id}:${s.role_id}:${s.date}:${period}`;
+      const arr = index.get(key);
+      if (arr) arr.push(s);
+      else index.set(key, [s]);
+    }
+    return index;
+  }, [shifts]);
+
+  // Pre-index coverage by cell key for O(1) lookup
+  const coverageIndex = useMemo(() => {
+    const index = new Map<string, CoverageSlot>();
+    for (const c of coverage) {
+      const key = `${c.locationId}:${c.roleId}:${c.dayOfWeek}:${c.shiftPeriod}`;
+      index.set(key, c);
+    }
+    return index;
+  }, [coverage]);
 
   const navigateWeek = (delta: number) => {
     const d = addWeeks(parseISO(weekStart), delta);
@@ -158,26 +185,56 @@ export function SchedulerClient({
     });
   };
 
-  const getShiftsInCell = (locationId: string, roleId: string, day: number, period: string) => {
-    const d = parseISO(weekStart);
-    const cellDate = new Date(d);
-    cellDate.setDate(cellDate.getDate() + day);
-    const dateStr = format(cellDate, "yyyy-MM-dd");
-    const periodTimes =
-      period === "morning"
-        ? "08:00"
-        : period === "afternoon"
-        ? "13:00"
-        : "18:00";
-    return shifts.filter(
-      (s) =>
-        s.location_id === locationId &&
-        s.role_id === roleId &&
-        s.date === dateStr &&
-        s.start_time === periodTimes &&
-        s.status === "active"
+  const getShiftsInCell = useCallback(
+    (locationId: string, roleId: string, day: number, period: string) => {
+      const d = parseISO(weekStart);
+      const cellDate = addDays(d, day);
+      const dateStr = format(cellDate, "yyyy-MM-dd");
+      const key = `${locationId}:${roleId}:${dateStr}:${period}`;
+      return shiftIndex.get(key) ?? [];
+    },
+    [weekStart, shiftIndex]
+  );
+
+  const handleDeleteShift = useCallback(
+    (shiftId: string) => {
+      startTransition(async () => {
+        await deleteShift(shiftId);
+        router.refresh();
+      });
+    },
+    [router, startTransition]
+  );
+
+  const handleFindSubstitute = useCallback(
+    (s: Shift) => setSickLeaveShift(s),
+    []
+  );
+
+  const isEmpty = locations.length === 0 || employees.length === 0;
+
+  if (isEmpty) {
+    return (
+      <div className="space-y-6">
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+          Programmazione
+        </h1>
+        <div className="rounded-xl border border-dashed border-zinc-300 p-12 text-center dark:border-zinc-700">
+          <p className="text-zinc-600 dark:text-zinc-400">
+            {locations.length === 0
+              ? "Aggiungi almeno una sede e un ruolo con fabbisogno per creare gli orari."
+              : "Aggiungi almeno un dipendente attivo per programmare i turni."}
+          </p>
+          <Link
+            href={locations.length === 0 ? "/locations/new" : "/employees/new"}
+            className="mt-4 inline-block text-[hsl(var(--primary))] hover:underline"
+          >
+            {locations.length === 0 ? "Aggiungi sede" : "Aggiungi dipendente"}
+          </Link>
+        </div>
+      </div>
     );
-  };
+  }
 
   return (
     <div className="flex h-[calc(100vh-4rem)] gap-4 overflow-hidden">
@@ -207,6 +264,13 @@ export function SchedulerClient({
             </div>
           </div>
           <div className="flex items-center gap-4">
+            <button
+              onClick={() => setShowReplicateModal(true)}
+              disabled={pending}
+              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+            >
+              Replica settimana prec.
+            </button>
             <button
               onClick={() => setShowAIModal(true)}
               className="flex items-center gap-2 rounded-lg border border-[hsl(var(--primary))] px-3 py-2 text-sm font-medium text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/10"
@@ -242,8 +306,13 @@ export function SchedulerClient({
             <button
               onClick={() => {
                 startTransition(async () => {
-                  await publishSchedule(schedule.id);
-                  router.refresh();
+                  try {
+                    await publishSchedule(schedule.id);
+                    toast.success("Orario pubblicato");
+                    router.refresh();
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : "Errore");
+                  }
                 });
               }}
               disabled={pending}
@@ -278,60 +347,45 @@ export function SchedulerClient({
                   </thead>
                   <tbody>
                     {locations.map((loc) =>
-                      roles.map((role) => {
-                        const covKey = (d: number, p: string) =>
-                          coverage.find(
-                            (c) =>
-                              c.locationId === loc.id &&
-                              c.roleId === role.id &&
-                              c.dayOfWeek === d &&
-                              c.shiftPeriod === p
-                          );
-                        return (
-                          <tr
-                            key={`${loc.id}-${role.id}`}
-                            className="border-b border-zinc-100 dark:border-zinc-800"
-                          >
-                            <td className="sticky left-0 z-10 bg-white p-2 dark:bg-zinc-900">
-                              <span className="font-medium">{loc.name}</span>
-                              <span className="text-zinc-500"> / {role.name}</span>
-                            </td>
-                            {Array.from({ length: 7 }, (_, day) =>
-                              PERIODS.map((period) => {
-                                const shiftsHere = getShiftsInCell(
-                                  loc.id,
-                                  role.id,
-                                  day,
-                                  period.id
-                                );
-                                const cov = covKey(day, period.id);
-                                const assigned = shiftsHere.length;
-                                const required = cov?.required ?? 0;
-                                const isOver = assigned >= required && required > 0;
-                                return (
-                                  <ShiftCell
-                                    key={`${loc.id}-${role.id}-${day}-${period.id}`}
-                                    locationId={loc.id}
-                                    roleId={role.id}
-                                    day={day}
-                                    period={period.id}
-                                    shifts={shiftsHere}
-                                    assigned={assigned}
-                                    required={required}
-                                    onDelete={(shiftId) => {
-                                      startTransition(async () => {
-                                        await deleteShift(shiftId);
-                                        router.refresh();
-                                      });
-                                    }}
-                                    onFindSubstitute={(s) => setSickLeaveShift(s)}
-                                  />
-                                );
-                              })
-                            )}
-                          </tr>
-                        );
-                      })
+                      roles.map((role) => (
+                        <tr
+                          key={`${loc.id}-${role.id}`}
+                          className="border-b border-zinc-100 dark:border-zinc-800"
+                        >
+                          <td className="sticky left-0 z-10 bg-white p-2 dark:bg-zinc-900">
+                            <span className="font-medium">{loc.name}</span>
+                            <span className="text-zinc-500"> / {role.name}</span>
+                          </td>
+                          {Array.from({ length: 7 }, (_, day) =>
+                            PERIODS.map((period) => {
+                              const shiftsHere = getShiftsInCell(
+                                loc.id,
+                                role.id,
+                                day,
+                                period.id
+                              );
+                              const covKey = `${loc.id}:${role.id}:${day}:${period.id}`;
+                              const cov = coverageIndex.get(covKey);
+                              const assigned = shiftsHere.length;
+                              const required = cov?.required ?? 0;
+                              return (
+                                <ShiftCell
+                                  key={`${loc.id}-${role.id}-${day}-${period.id}`}
+                                  locationId={loc.id}
+                                  roleId={role.id}
+                                  day={day}
+                                  period={period.id}
+                                  shifts={shiftsHere}
+                                  assigned={assigned}
+                                  required={required}
+                                  onDelete={handleDeleteShift}
+                                  onFindSubstitute={handleFindSubstitute}
+                                />
+                              );
+                            })
+                          )}
+                        </tr>
+                      ))
                     )}
                   </tbody>
                 </table>
@@ -359,6 +413,13 @@ export function SchedulerClient({
           onClose={() => setShowAIModal(false)}
         />
       )}
+      {showReplicateModal && (
+        <ReplicateWeekModal
+          scheduleId={schedule.id}
+          weekStart={weekStart}
+          onClose={() => setShowReplicateModal(false)}
+        />
+      )}
       {sickLeaveShift && (
         <SickLeavePopup
           shiftId={sickLeaveShift.id}
@@ -383,7 +444,7 @@ export function SchedulerClient({
   );
 }
 
-function ShiftCell({
+const ShiftCell = memo(function ShiftCell({
   locationId,
   roleId,
   day,
@@ -450,4 +511,4 @@ function ShiftCell({
       </div>
     </td>
   );
-}
+});

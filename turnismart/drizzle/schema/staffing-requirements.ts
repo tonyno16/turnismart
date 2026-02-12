@@ -9,7 +9,7 @@ import {
 import { locations } from "./locations";
 import { roles } from "./roles";
 
-export const shiftPeriods = ["morning", "afternoon", "evening"] as const;
+export const shiftPeriods = ["morning", "evening"] as const;
 export type ShiftPeriod = (typeof shiftPeriods)[number];
 
 export const staffingRequirements = pgTable(

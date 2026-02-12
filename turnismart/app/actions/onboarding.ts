@@ -16,7 +16,7 @@ import { requireOrganization } from "@/lib/auth";
 import { SECTOR_ROLES, type SectorKey } from "@/lib/onboarding/sector-roles";
 
 const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
-const SHIFT_PERIODS = ["morning", "afternoon", "evening"] as const;
+const SHIFT_PERIODS = ["morning", "evening"] as const;
 
 export async function completeStep1(sector: string) {
   const { organization } = await requireOrganization();
@@ -163,7 +163,7 @@ export async function completeStep4(formData: FormData) {
         await db.insert(employeeRoles).values({
           employee_id: emp.id,
           role_id: roleId,
-          is_primary: true,
+          priority: 1,
         }).onConflictDoNothing({
           target: [employeeRoles.employee_id, employeeRoles.role_id],
         });

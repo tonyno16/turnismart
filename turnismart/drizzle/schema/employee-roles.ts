@@ -1,7 +1,8 @@
-import { pgTable, boolean, timestamp, uuid, unique } from "drizzle-orm/pg-core";
+import { pgTable, integer, numeric, timestamp, uuid, unique } from "drizzle-orm/pg-core";
 import { employees } from "./employees";
 import { roles } from "./roles";
 
+/** Priority 1 = primary role, 2 = second, 3 = third. Max 3 roles per employee. */
 export const employeeRoles = pgTable(
   "employee_roles",
   {
@@ -12,7 +13,9 @@ export const employeeRoles = pgTable(
     role_id: uuid("role_id")
       .notNull()
       .references(() => roles.id, { onDelete: "cascade" }),
-    is_primary: boolean("is_primary").default(false).notNull(),
+    priority: integer("priority").default(1).notNull(), // 1..3
+    /** Paga oraria per questa mansione. Se null, usa employees.hourly_rate */
+    hourly_rate: numeric("hourly_rate", { precision: 8, scale: 2 }),
     created_at: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

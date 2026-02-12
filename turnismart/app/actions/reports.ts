@@ -6,6 +6,7 @@ import { format, subMonths } from "date-fns";
 import { db } from "@/lib/db";
 import { reports, reportGenerationJobs } from "@/drizzle/schema";
 import { requireOrganization } from "@/lib/auth";
+import { checkQuota, incrementUsage } from "@/lib/usage";
 import {
   aggregateMonthlyData,
   generateReportCsv,
@@ -21,6 +22,8 @@ export type GenerateReportResult =
 export async function generateReport(monthStr: string): Promise<GenerateReportResult> {
   try {
     const { user, organization } = await requireOrganization();
+    const quota = await checkQuota(organization.id, "reports");
+    if (!quota.allowed) return { ok: false, error: quota.message ?? "Limite report mensili raggiunto" };
 
     const [existing] = await db
       .select()
@@ -125,6 +128,8 @@ export async function generateReport(monthStr: string): Promise<GenerateReportRe
         completed_at: new Date(),
       })
       .where(eq(reportGenerationJobs.id, job.id));
+
+    await incrementUsage(organization.id, "reports_generated_count");
 
     revalidatePath("/reports");
     revalidatePath("/accountant");

@@ -21,8 +21,10 @@ export default async function SchedulePage({
     getOnboardingData(),
   ]);
 
-  const coverage = await getStaffingCoverage(organization.id, weekStart, schedule.id);
-  const stats = await getWeekStats(organization.id, weekStart);
+  const [coverage, stats] = await Promise.all([
+    getStaffingCoverage(organization.id, weekStart, schedule.id),
+    getWeekStats(organization.id, weekStart),
+  ]);
 
   return (
     <SchedulerClient

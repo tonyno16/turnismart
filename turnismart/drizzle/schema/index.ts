@@ -5,6 +5,7 @@ import { employeeIncompatibilities } from "./employee-incompatibilities";
 import { employeeRoles } from "./employee-roles";
 import { employeeTimeOff } from "./employee-time-off";
 import { employees } from "./employees";
+import { importJobs } from "./import-jobs";
 import { invitations } from "./invitations";
 import { locations } from "./locations";
 import { organizationSettings } from "./organization-settings";
@@ -20,10 +21,15 @@ import { schedules } from "./schedules";
 import { shifts } from "./shifts";
 import { shiftRequests } from "./shift-requests";
 import { staffingRequirements } from "./staffing-requirements";
+import { usageTracking } from "./usage-tracking";
 import { users } from "./users";
 
 export { organizations } from "./organizations";
 export { users, userRoles, type UserRole } from "./users";
+export {
+  importJobs,
+  importJobStatuses,
+} from "./import-jobs";
 export { invitations, invitationStatuses, type InvitationStatus } from "./invitations";
 export {
   accountantClients,
@@ -96,6 +102,7 @@ export {
   type ShiftRequestType,
   type ShiftRequestStatus,
 } from "./shift-requests";
+export { usageTracking } from "./usage-tracking";
 
 export const organizationsRelations = relations(organizations, ({ many }) => ({
   users: many(users),
@@ -106,6 +113,8 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   organizationSettings: many(organizationSettings),
   employees: many(employees),
   employeeIncompatibilities: many(employeeIncompatibilities),
+  usageTracking: many(usageTracking),
+  importJobs: many(importJobs),
 }));
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -210,4 +219,12 @@ export const shiftRequestsRelations = relations(shiftRequests, ({ one }) => ({
   shift: one(shifts),
   swapWithEmployee: one(employees),
   reviewedByUser: one(users),
+}));
+
+export const usageTrackingRelations = relations(usageTracking, ({ one }) => ({
+  organization: one(organizations),
+}));
+
+export const importJobsRelations = relations(importJobs, ({ one }) => ({
+  organization: one(organizations),
 }));

@@ -11,7 +11,7 @@ import { employees } from "./employees";
 export const availabilityStatuses = ["available", "unavailable", "preferred"] as const;
 export type AvailabilityStatus = (typeof availabilityStatuses)[number];
 
-export const availabilityShiftPeriods = ["morning", "afternoon", "evening"] as const;
+export const availabilityShiftPeriods = ["morning", "evening"] as const;
 export type AvailabilityShiftPeriod = (typeof availabilityShiftPeriods)[number];
 
 export const employeeAvailability = pgTable(

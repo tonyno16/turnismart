@@ -16,13 +16,21 @@ import {
   type AvailabilityStatus,
   type TimeOffType,
 } from "@/drizzle/schema";
-import { requireOrganization } from "@/lib/auth";
+import { requireOrganization, requireEmployee } from "@/lib/auth";
+import { checkQuota } from "@/lib/usage";
 
 export async function createEmployee(formData: FormData) {
   const { organization } = await requireOrganization();
+  const quota = await checkQuota(organization.id, "employees");
+  if (!quota.allowed) throw new Error(quota.message ?? "Limite dipendenti raggiunto");
   const firstName = (formData.get("firstName") as string)?.trim();
   const lastName = (formData.get("lastName") as string)?.trim();
   if (!firstName || !lastName) throw new Error("Nome e cognome obbligatori");
+
+  const hourlyRateRaw = (formData.get("hourlyRate") as string)?.trim();
+  const hourlyRate = hourlyRateRaw && !isNaN(parseFloat(hourlyRateRaw))
+    ? parseFloat(hourlyRateRaw)
+    : 0;
 
   const [emp] = await db
     .insert(employees)
@@ -39,15 +47,22 @@ export async function createEmployee(formData: FormData) {
           ? (v as ContractType)
           : "full_time";
       })(),
+      hourly_rate: String(hourlyRate),
     })
     .returning();
-  const roleId = formData.get("roleId") as string;
-  if (emp && roleId) {
-    await db.insert(employeeRoles).values({
-      employee_id: emp.id,
-      role_id: roleId,
-      is_primary: true,
-    });
+  const roleIds = [
+    formData.get("roleId1") as string,
+    formData.get("roleId2") as string,
+    formData.get("roleId3") as string,
+  ].filter(Boolean) as string[];
+  if (emp && roleIds.length > 0) {
+    for (let i = 0; i < Math.min(roleIds.length, 3); i++) {
+      await db.insert(employeeRoles).values({
+        employee_id: emp.id,
+        role_id: roleIds[i],
+        priority: i + 1,
+      });
+    }
   }
   revalidatePath("/employees");
   return emp;
@@ -67,6 +82,9 @@ export async function updateEmployee(employeeId: string, formData: FormData) {
     .limit(1);
   if (!emp) throw new Error("Dipendente non trovato");
 
+  const hourlyRateRaw = (formData.get("hourlyRate") as string)?.trim();
+  const hourlyRate = hourlyRateRaw ? parseFloat(hourlyRateRaw) : null;
+
   await db
     .update(employees)
     .set({
@@ -82,12 +100,34 @@ export async function updateEmployee(employeeId: string, formData: FormData) {
           : emp.contract_type;
       })(),
       preferred_location_id: (formData.get("preferredLocationId") as string) || null,
+      hourly_rate: hourlyRate !== null && !isNaN(hourlyRate) ? String(hourlyRate) : emp.hourly_rate,
       notes: (formData.get("notes") as string)?.trim() || null,
       updated_at: new Date(),
     })
     .where(eq(employees.id, employeeId));
   revalidatePath("/employees");
   revalidatePath(`/employees/${employeeId}`);
+}
+
+export async function deleteEmployee(employeeId: string) {
+  const { organization } = await requireOrganization();
+  const [emp] = await db
+    .select()
+    .from(employees)
+    .where(
+      and(
+        eq(employees.id, employeeId),
+        eq(employees.organization_id, organization.id)
+      )
+    )
+    .limit(1);
+  if (!emp) throw new Error("Dipendente non trovato");
+
+  await db.delete(employees).where(eq(employees.id, employeeId));
+  revalidatePath("/employees");
+  revalidatePath("/dashboard");
+  revalidatePath("/schedule");
+  return { ok: true };
 }
 
 export async function toggleEmployeeActive(employeeId: string) {
@@ -114,10 +154,11 @@ export async function toggleEmployeeActive(employeeId: string) {
   revalidatePath(`/employees/${employeeId}`);
 }
 
+/** roleIds: ordered array, max 3. hourlyRates: { roleId: "12.50" } - paga per mansione, null = usa base. */
 export async function updateEmployeeRoles(
   employeeId: string,
   roleIds: string[],
-  primaryRoleId?: string
+  hourlyRates?: Record<string, string>
 ) {
   const { organization } = await requireOrganization();
   const [emp] = await db
@@ -132,13 +173,19 @@ export async function updateEmployeeRoles(
     .limit(1);
   if (!emp) throw new Error("Dipendente non trovato");
 
+  const limited = roleIds.filter(Boolean).slice(0, 3);
   await db.delete(employeeRoles).where(eq(employeeRoles.employee_id, employeeId));
-  for (const roleId of roleIds) {
-    if (!roleId) continue;
+  for (let i = 0; i < limited.length; i++) {
+    const roleId = limited[i];
+    const rateStr = hourlyRates?.[roleId]?.trim();
+    const rate = rateStr && !isNaN(parseFloat(rateStr)) && parseFloat(rateStr) >= 0
+      ? String(parseFloat(rateStr))
+      : null;
     await db.insert(employeeRoles).values({
       employee_id: employeeId,
       role_id: roleId,
-      is_primary: roleId === primaryRoleId,
+      priority: i + 1,
+      hourly_rate: rate,
     });
   }
   revalidatePath(`/employees/${employeeId}`);
@@ -165,7 +212,7 @@ export async function updateAvailability(
     .limit(1);
   if (!emp) throw new Error("Dipendente non trovato");
 
-  const SHIFT_PERIODS = ["morning", "afternoon", "evening"] as const;
+  const SHIFT_PERIODS = ["morning", "evening"] as const;
   for (const u of updates) {
     const shiftPeriod = SHIFT_PERIODS.includes(
       u.shiftPeriod as (typeof SHIFT_PERIODS)[number]
@@ -216,6 +263,24 @@ export async function createIncompatibility(
   });
   revalidatePath(`/employees/${employeeAId}`);
   revalidatePath(`/employees/${employeeBId}`);
+}
+
+/** Employee self-service: request time off (vacation, leave, sick) */
+export async function createMyTimeOff(formData: FormData) {
+  const { employee } = await requireEmployee();
+  return createTimeOff(employee.id, formData);
+}
+
+/** Employee self-service: update own availability (role must be employee with linked record) */
+export async function updateMyAvailability(
+  updates: Array<{
+    dayOfWeek: number;
+    shiftPeriod: string;
+    status: string;
+  }>
+) {
+  const { employee } = await requireEmployee();
+  return updateAvailability(employee.id, updates);
 }
 
 export async function removeIncompatibility(incompatibilityId: string) {
@@ -273,6 +338,7 @@ export async function approveTimeOff(timeOffId: string) {
     })
     .where(eq(employeeTimeOff.id, timeOffId));
   revalidatePath("/employees");
+  revalidatePath("/requests");
 }
 
 export async function rejectTimeOff(timeOffId: string) {
@@ -282,4 +348,5 @@ export async function rejectTimeOff(timeOffId: string) {
     .set({ status: "rejected" })
     .where(eq(employeeTimeOff.id, timeOffId));
   revalidatePath("/employees");
+  revalidatePath("/requests");
 }

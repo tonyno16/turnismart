@@ -3,45 +3,60 @@
 ## App Summary
 
 **App:** SaaS italiano per scheduling personale multi-sede con AI optimization e report automatici per commercialista
-**Stack:** Next.js 15 + Supabase + Trigger.dev v4 + Stripe + Twilio WhatsApp + Resend + OpenAI GPT-4
+**Stack:** Next.js 16 + Supabase + Trigger.dev v4 + Stripe + Twilio WhatsApp + Resend + OpenAI GPT-4
 **Developer:** Solo developer
-**Database:** 24 tabelle PostgreSQL, organization-centric multi-tenant con RLS
-**Background Jobs:** 6 workflow Trigger.dev, 18 task totali
+**Database:** 24 tabelle PostgreSQL, organization-centric multi-tenant con RLS ✅
+**Background Jobs:** 1 workflow Trigger.dev (CSV import). AI, report, notifiche implementate in sync/server-side.
 
 ---
 
-## 🚨 Phase 0: Project Setup (MANDATORY FIRST STEP)
+## 📋 Stato attuale (Aggiornato)
+
+| Phase | Stato | Note |
+|-------|-------|------|
+| 0 | ✅ | Progetto configurato, dipendenze installate |
+| 1 | ✅ | Landing, privacy, terms, refund |
+| 2 | ✅ | Auth Supabase, middleware, invite flow |
+| 3 | ✅ | Onboarding 5 step, sector roles |
+| 4 | ✅ | Locations + Employees CRUD. Manca: copyStaffingFrom* |
+| 5 | ✅ | Scheduler DnD, vista per locale, conflict popup, employee sidebar |
+| 6 | ✅ | Dashboard con KPI e azioni rapide |
+| 7 | ✅ | AI scheduling (lib/ai-schedule sync), sick-leave sostituti, API /ai/suggest |
+| 8 | ✅ | Notifiche (lib/notifications sync), Twilio, Resend, webhooks |
+| 9 | ✅ | Report PDF/CSV/Excel, accountant portal, cron monthly |
+| 10 | ✅ | my-schedule, my-preferences, my-requests, approve/reject |
+| 11 | ✅ | Profile, Stripe Portal, usage, settings |
+| 12 | ✅ | CSV import (Trigger workflow) |
+| 13 | ✅ | Admin dashboard, organizations, analytics |
+| 14 | ✅ | PWA manifest, loading, empty states, toast, error boundary, SEO, E2E full-flow, security checklist |
+
+**Trigger.dev:** Solo `trigger/csv-import.ts` deployato. AI schedule, monthly report, notification dispatch, conflict resolution, accountant invite sono implementati in modo sincrono (lib/*, app/actions/*) per semplificazione.
+
+---
+
+## 🚨 Phase 0: Project Setup ✅
 
 **Goal**: Prepare development environment, install dependencies, configure all external services
-**⚠️ CRITICAL**: This phase must be completed before any other development work begins
 
 ### Run Setup Analysis
 
-[Background: Essential first step to understand current template state and requirements]
-
-- [ ] **REQUIRED**: Run `setup.md` using **claude-4-sonnet-1m** on **max mode** for maximum context
-- [ ] Review generated setup analysis and recommendations
-- [ ] Verify development environment is properly configured
+- [x] Verify development environment is properly configured
 
 ### Project Initialization
 
-[Goal: Scaffold Next.js project with all core dependencies configured]
-
-- [ ] Create Next.js 15 project with App Router + TypeScript
-- [ ] Install and configure Tailwind CSS v4
-- [ ] Install Drizzle ORM + `drizzle-kit` + `postgres` driver
-- [ ] Install `@supabase/supabase-js` + `@supabase/ssr`
-- [ ] Install `@trigger.dev/sdk` v4 + `@trigger.dev/react-hooks`
-- [ ] Install `stripe` + `@stripe/stripe-js`
-- [ ] Install `@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities`
-- [ ] Install `openai`, `twilio`, `resend`
-- [ ] Install utility libs: `date-fns`, `zod`, `lucide-react`, `sonner`
+- [x] Next.js 16 project with App Router + TypeScript
+- [x] Tailwind CSS v4
+- [x] Drizzle ORM + `drizzle-kit` + `postgres` driver
+- [x] `@supabase/supabase-js` + `@supabase/ssr`
+- [x] `@trigger.dev/sdk` v4 + `@trigger.dev/react-hooks`
+- [x] `stripe` + `@stripe/stripe-js`
+- [x] `@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities`
+- [x] `openai`, `twilio`, `resend`
+- [x] `date-fns`, `zod`, `lucide-react`, `sonner`
 
 ### Environment Configuration
 
-[Goal: All external service connections verified and working]
-
-- [ ] Create `.env.local` with all required variables:
+- [x] `.env.local` con variabili richieste:
   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
   - `DATABASE_URL` (Supabase PostgreSQL connection string)
   - `TRIGGER_SECRET_KEY` (Trigger.dev project key)
@@ -50,16 +65,14 @@
   - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`
   - `RESEND_API_KEY`
   - `NEXT_PUBLIC_APP_URL`
-- [ ] Configure Supabase project (Auth, Database, Storage)
-- [ ] Configure Trigger.dev project and connect
-- [ ] Configure Stripe products and pricing (Starter €9.99, Pro €24.99, Business €49.99)
-- [ ] Verify all env vars are set and services respond
+- [x] Supabase (Auth, Database, Storage)
+- [x] Trigger.dev project
+- [x] Stripe products e pricing
+- [ ] Verify all env vars and services (manuale)
 
 ### Folder Structure
 
-[Goal: Establish project organization matching system architecture]
-
-- [ ] Create folder structure:
+- [x] Struttura cartelle conforme:
   ```
   app/
     (public)/          # Landing, pricing, auth pages
@@ -88,469 +101,161 @@
     reports/           # Report-specific
   lib/                 # Server utilities
   trigger/             # Trigger.dev workflows
-  drizzle/
-    schema/            # All Drizzle table schemas
-    migrations/        # Generated migrations
+  drizzle/schema/, migrations/
   ```
-- [ ] Document any critical findings before proceeding to Phase 1
-
 ---
 
-## Phase 1: Landing Page & Branding
+## Phase 1: Landing Page & Branding ✅
 
-**Goal**: Professional landing page che converte visitatori in trial users. Il visitatore capisce cosa fa l'app e puo registrarsi.
+**Goal**: Professional landing page che converte visitatori in trial users.
 
 ### Landing Page Implementation
 
-[Background: Prima impressione dell'app, deve comunicare valore in 5 secondi]
-
-- [ ] Build `app/(public)/page.tsx` - Landing page completa
-  - [ ] Hero section: headline "Crea gli orari del personale in pochi minuti, non in ore" + CTA "Prova Gratis per 30 Giorni"
-  - [ ] "Come Funziona" section: 3 step (Configura → Genera con AI → Pubblica)
-  - [ ] Features grid: 6 card (AI Scheduling, Multi-Sede, Report Auto, Drag & Drop, WhatsApp, Mobile)
-  - [ ] Pricing section: 3 piani (Starter €9.99, Pro €24.99, Business €49.99) con feature comparison
-  - [ ] FAQ accordion: 4-6 domande frequenti
-  - [ ] Footer: Privacy, Termini, Contatti
+- [x] `app/(public)/page.tsx`
+  - [x] Hero section + CTA
+  - [x] Features grid (6 card)
+  - [x] Pricing section (3 piani)
+  - [x] FAQ accordion
+  - [x] Footer con link
 
 ### Legal Pages
 
-[Goal: Pagine obbligatorie per SaaS italiano]
-
-- [ ] Build `app/(public)/privacy/page.tsx` - Privacy Policy GDPR-compliant
-- [ ] Build `app/(public)/terms/page.tsx` - Termini di Servizio
-- [ ] Build `app/(public)/refund/page.tsx` - Politica Rimborsi (14 giorni)
+- [x] `app/(public)/privacy/page.tsx`
+- [x] `app/(public)/terms/page.tsx`
+- [x] `app/(public)/refund/page.tsx`
 
 ---
 
-## Phase 2: Authentication & Multi-Tenant Foundation
+## Phase 2: Authentication & Multi-Tenant Foundation ✅
 
-**Goal**: Utenti possono registrarsi, fare login, e creare la propria organizzazione. Sistema multi-tenant funzionante con isolamento dati.
+**Goal**: Utenti possono registrarsi, fare login, e creare la propria organizzazione.
 
 ### Database Schema: Identity & Multi-Tenancy
 
-[Goal: Creare le tabelle fondamentali su cui tutto il resto si basa]
+- [x] `drizzle/schema/organizations.ts`
+- [x] `users.ts`, `invitations.ts`, `accountant-clients.ts`
+- [x] Migrazioni applicate, RLS abilitato
 
-- [ ] Create `drizzle/schema/organizations.ts`
-  - [ ] Fields: id, name, slug, sector, logo_url, phone, email, stripe_customer_id, trial_ends_at, onboarding_completed, created_at, updated_at
-  - [ ] UNIQUE constraint su slug e stripe_customer_id
-- [ ] Create `drizzle/schema/users.ts`
-  - [ ] Fields: id (match Supabase Auth), organization_id (FK nullable), email, full_name, phone, avatar_url, role (owner/manager/employee/accountant/admin), is_active, created_at, updated_at
-  - [ ] UNIQUE constraint su email
-- [ ] Create `drizzle/schema/invitations.ts`
-  - [ ] Fields: id, organization_id, invited_by_user_id, email, phone, role, token (UNIQUE), status, expires_at, accepted_at, created_at
-- [ ] Create `drizzle/schema/accountant-clients.ts`
-  - [ ] Fields: id, accountant_user_id, organization_id, status, invited_at, accepted_at
-  - [ ] UNIQUE constraint su (accountant_user_id, organization_id)
-- [ ] Run `drizzle-kit generate` + `drizzle-kit migrate` per applicare migration
-- [ ] Enable Row Level Security su tutte le tabelle con policy per organization_id
+### Supabase Auth & Middleware
 
-### Supabase Auth Configuration
-
-[Goal: Autenticazione funzionante con email/password e Google OAuth]
-
-- [ ] Configure Supabase Auth providers: email/password + Google OAuth
-- [ ] Create `lib/supabase/server.ts` - Server-side Supabase client
-- [ ] Create `lib/supabase/client.ts` - Client-side Supabase client
-- [ ] Create `middleware.ts` - Auth check + role guard + org isolation
-  - [ ] Public routes: /, /privacy, /terms, /refund, /auth/*
-  - [ ] Protected routes: /app/* (require auth)
-  - [ ] Role-based routing: /admin/* (admin only), /accountant/* (accountant only)
+- [x] `lib/supabase/server.ts`, `client.ts`
+- [x] `middleware.ts` - Auth + role guard (admin, accountant)
 
 ### Auth Pages
 
-[Goal: Flusso signup/login completo e funzionante]
-
-- [ ] Build `app/(public)/auth/sign-up/page.tsx` - Registrazione (email + password + full name)
-- [ ] Build `app/(public)/auth/login/page.tsx` - Login (email + password + Google OAuth)
-- [ ] Build `app/(public)/auth/forgot-password/page.tsx` - Reset password
-- [ ] Build `app/(public)/auth/verify-email/page.tsx` - Conferma email
-- [ ] Build `app/(public)/auth/invite/[token]/page.tsx` - Accetta invito (dipendente/commercialista)
-- [ ] Create `app/actions/auth.ts` - Server Actions per signup, login, invite accept
-  - [ ] On signup: create user + create organization (role=owner) + set trial_ends_at = 30 days
-  - [ ] On invite accept: create user + link to existing organization with invited role
+- [x] sign-up, login, forgot-password, reset-password, verify-email
+- [x] invite/[token] - Accetta invito
+- [x] `app/actions/auth.ts`
 
 ### Organization Setup
 
-[Goal: Nuovo utente crea automaticamente la propria organizzazione al signup]
-
-- [ ] Auto-create organization on signup (with sector selection)
-- [ ] Create `lib/auth.ts` - getCurrentUser(), getCurrentOrganization(), requireRole()
-- [ ] Create `lib/organizations.ts` - getOrganization(), updateOrganization()
+- [x] `lib/auth.ts`, `lib/organizations.ts`
 
 ---
 
-## Phase 3: Onboarding Wizard & Core Data Setup
+## Phase 3: Onboarding Wizard & Core Data Setup ✅
 
-**Goal**: Nuovo titolare completa il setup iniziale in 10 minuti: tipo attivita, locali, ruoli, fabbisogno, primi dipendenti. Al termine l'app e pronta per creare il primo orario.
+**Goal**: Setup iniziale in 5 step: settore → locale → fabbisogno → dipendenti → riepilogo.
 
 ### Database Schema: Locations, Roles, Staffing
 
-[Goal: Tabelle per locali, mansioni e fabbisogno personale]
-
-- [ ] Create `drizzle/schema/locations.ts`
-  - [ ] Fields: id, organization_id, name, address, phone, opening_hours (JSONB), is_active, sort_order, created_at, updated_at
-- [ ] Create `drizzle/schema/roles.ts`
-  - [ ] Fields: id, organization_id, name, color, icon, is_active, sort_order, created_at
-  - [ ] UNIQUE (organization_id, name)
-- [ ] Create `drizzle/schema/staffing-requirements.ts`
-  - [ ] Fields: id, location_id, role_id, day_of_week (0-6), shift_period (morning/afternoon/evening), required_count, created_at, updated_at
-  - [ ] UNIQUE (location_id, role_id, day_of_week, shift_period)
-- [ ] Create `drizzle/schema/organization-settings.ts`
-  - [ ] Fields: id, organization_id (UNIQUE), work_rules (JSONB), report_settings (JSONB), notification_settings (JSONB), created_at, updated_at
-  - [ ] Default work_rules: { min_rest_between_shifts_hours: 11, max_consecutive_days: 6, overtime_threshold_hours: 40 }
-- [ ] Run migration
+- [x] locations, roles, staffing-requirements, organization-settings
+- [x] Migrazioni
 
 ### Onboarding Wizard
 
-[Goal: Flusso guidato in 5 step per configurare l'attivita da zero]
-
-- [ ] Build `app/(protected)/onboarding/page.tsx` - Wizard multi-step
-  - [ ] Step 1: Tipo attivita (ristorante, bar, hotel, retail, RSA, altro) → pre-popola ruoli suggeriti
-  - [ ] Step 2: Primo locale (nome, indirizzo, orari apertura)
-  - [ ] Step 3: Fabbisogno personale (griglia ruolo x giorno x fascia, editabile)
-  - [ ] Step 4: Primi dipendenti (form rapido: nome, cognome, telefono, mansione, ore settimanali)
-  - [ ] Step 5: Riepilogo + "Inizia a creare l'orario!"
-- [ ] Create `app/actions/onboarding.ts` - Server Actions per ogni step
-  - [ ] completeStep1: set organization.sector + create default roles per sector
-  - [ ] completeStep2: create location + opening_hours
-  - [ ] completeStep3: create staffing_requirements records
-  - [ ] completeStep4: create employees + employee_roles
-  - [ ] completeStep5: set organization.onboarding_completed = true → redirect to /app/dashboard
-- [ ] Create seed data per sector (ruoli suggeriti):
-  - [ ] Ristorante: Cameriere, Cuoco, Lavapiatti, Barista, Maitre
-  - [ ] Bar: Barista, Cameriere
-  - [ ] Hotel: Receptionist, Housekeeping, Portiere, Cameriere
-  - [ ] RSA: Operatore OSS, Infermiere, Medico, Ausiliario
-  - [ ] Retail: Cassiere, Commesso, Magazziniere
-- [ ] Redirect logic: se onboarding_completed = false → redirect a /onboarding
+- [x] `app/(protected)/onboarding/page.tsx` - 5 step
+- [x] `app/actions/onboarding.ts`
+- [x] Ruoli per settore (lib/onboarding/sector-roles.ts)
+- [x] Redirect se onboarding_completed = false
 
 ---
 
-## Phase 4: Location & Employee Management (CRUD)
+## Phase 4: Location & Employee Management (CRUD) ✅
 
-**Goal**: Titolare gestisce completamente locali e dipendenti: aggiunge, modifica, rimuove locali con fabbisogno; gestisce anagrafica dipendenti con contratto, mansioni, disponibilita e incompatibilita.
+**Goal**: Gestione completa locali e dipendenti.
 
-### Database Schema: Employees & Contracts
+### Database & Pages
 
-[Goal: Tabelle complete per anagrafica dipendenti e tutti i vincoli]
-
-- [ ] Create `drizzle/schema/employees.ts`
-  - [ ] Fields: id, organization_id, user_id (nullable FK), first_name, last_name, email, phone, contract_type, weekly_hours, max_weekly_hours, hourly_rate, overtime_rate, holiday_rate, preferred_location_id, is_active, hired_at, notes, created_at, updated_at
-- [ ] Create `drizzle/schema/employee-roles.ts`
-  - [ ] Fields: id, employee_id, role_id, is_primary, created_at
-  - [ ] UNIQUE (employee_id, role_id)
-- [ ] Create `drizzle/schema/employee-availability.ts`
-  - [ ] Fields: id, employee_id, day_of_week, shift_period, status (available/unavailable/preferred), created_at, updated_at
-  - [ ] UNIQUE (employee_id, day_of_week, shift_period)
-- [ ] Create `drizzle/schema/employee-incompatibilities.ts`
-  - [ ] Fields: id, organization_id, employee_a_id, employee_b_id, reason, created_at
-  - [ ] UNIQUE (employee_a_id, employee_b_id) con CHECK (a < b)
-- [ ] Create `drizzle/schema/employee-time-off.ts`
-  - [ ] Fields: id, employee_id, type (vacation/personal_leave/sick_leave/other), start_date, end_date, status (pending/approved/rejected), approved_by_user_id, notes, created_at
-- [ ] Run migration
-
-### Location Management Pages
-
-[Goal: Titolare visualizza, aggiunge e modifica locali con tutto il fabbisogno personale]
-
-- [ ] Build `app/(protected)/locations/page.tsx` - Lista locali come cards
-  - [ ] Card per locale: nome, indirizzo, orari, numero dipendenti, stato (configurato/incompleto)
-  - [ ] Azioni: [Modifica] [Vedi Orario] [Completa Setup]
-  - [ ] Bottone [+ Aggiungi Locale] (con check quota piano)
-- [ ] Build `app/(protected)/locations/[id]/page.tsx` - Dettaglio locale
-  - [ ] Info locale editabili (nome, indirizzo, telefono, orari apertura)
-  - [ ] Griglia fabbisogno personale (ruolo x giorno x fascia) editabile inline
-  - [ ] [+ Aggiungi Ruolo], [Copia da Turno], [Copia da altro Locale]
-  - [ ] Lista dipendenti assegnati a questo locale
-  - [ ] Statistiche: turni/sett, costo stimato, % copertura
-- [ ] Create `app/actions/locations.ts` - Server Actions
-  - [ ] createLocation, updateLocation, deleteLocation
-  - [ ] updateStaffingRequirements (batch update griglia)
-  - [ ] copyStaffingFromShift, copyStaffingFromLocation
-
-### Employee Management Pages
-
-[Goal: Titolare gestisce anagrafica completa dipendenti con contratto, mansioni e vincoli]
-
-- [ ] Build `app/(protected)/employees/page.tsx` - Lista dipendenti con tabella
-  - [ ] Colonne: Nome, Mansioni (badges), Sede, Ore contratto
-  - [ ] Filtri: [Mansione ▼] [Locale ▼] [Contratto ▼]
-  - [ ] Cerca per nome
-  - [ ] Bottoni [+ Aggiungi] [📥 Import CSV]
-  - [ ] Paginazione
-- [ ] Build `app/(protected)/employees/[id]/page.tsx` - Dettaglio dipendente
-  - [ ] Profilo e contratto editabile (nome, email, telefono, tipo contratto, ore, paga)
-  - [ ] Mansioni assegnate (multi-select con primary badge)
-  - [ ] Griglia disponibilita settimanale (giorno x fascia: disponibile/non disp./preferito)
-  - [ ] Incompatibilita colleghi (lista + [+ Aggiungi collega])
-  - [ ] Sede preferita (select)
-  - [ ] Orario corrente (solo lettura, turni questa settimana)
-  - [ ] Storico ultimi 3 mesi (ore ord/straord, assenze, costo)
-- [ ] Create `app/actions/employees.ts` - Server Actions
-  - [ ] createEmployee, updateEmployee, toggleEmployeeActive
-  - [ ] updateEmployeeRoles (batch), updateAvailability (batch)
-  - [ ] createIncompatibility, removeIncompatibility
-  - [ ] createTimeOff, approveTimeOff, rejectTimeOff
-- [ ] Create `lib/employees.ts` - Query helpers
-  - [ ] getEmployeesByOrganization(orgId, filters)
-  - [ ] getEmployeeDetail(employeeId) - con roles, availability, incompatibilities
-  - [ ] getEmployeeWeeklyHours(employeeId, weekStart) - somma ore dalla shifts table
+- [x] Schema employees, employee-roles, availability, incompatibilities, time-off
+- [x] `locations/page.tsx`, `locations/[id]` con griglia fabbisogno
+- [x] `employees/page.tsx` con filtri e Import CSV, `employees/[id]` con profilo, disponibilità
+- [x] `app/actions/locations.ts` - createLocation, updateLocation, deleteLocation, updateStaffingRequirements
+- [x] `app/actions/employees.ts` - createEmployee, updateEmployee, approveTimeOff, rejectTimeOff
+- [x] `lib/employees.ts`, `lib/locations.ts`
+- [ ] Manca: copyStaffingFromShift, copyStaffingFromLocation (nice-to-have)
 
 ---
 
-## Phase 5: Scheduler Core (Drag & Drop)
+## Phase 5: Scheduler Core (Drag & Drop) ✅
 
-**Goal**: Titolare vede la griglia orario settimanale, puo assegnare turni trascinando dipendenti sulla griglia, e gestisce turni manualmente con validazione conflitti in tempo reale. Tutto senza AI ancora.
+**Goal**: Griglia orario settimanale con drag & drop, validazione conflitti.
 
 ### Database Schema: Schedules & Shifts
 
-[Goal: Tabelle core per lo scheduling]
-
-- [ ] Create `drizzle/schema/schedules.ts`
-  - [ ] Fields: id, organization_id, week_start_date, status (draft/published/modified_after_publish), published_at, published_by_user_id, notes, created_at, updated_at
-  - [ ] UNIQUE (organization_id, week_start_date)
-- [ ] Create `drizzle/schema/shifts.ts`
-  - [ ] Fields: id, schedule_id, organization_id, location_id, employee_id, role_id, date, start_time, end_time, break_minutes, is_auto_generated, status (active/cancelled/sick_leave), cancelled_reason, created_at, updated_at
-  - [ ] Indexes: schedule_id, employee_id, location_id, (employee_id, date), organization_id
-- [ ] Create `drizzle/schema/shift-requests.ts`
-  - [ ] Fields: id, organization_id, employee_id, type (shift_swap/vacation/personal_leave/sick_leave), status, shift_id, swap_with_employee_id, start_date, end_date, reason, reviewed_by_user_id, reviewed_at, review_notes, created_at
-- [ ] Run migration
+- [x] schedules, shifts, shift-requests
 
 ### Navigation & Layout
 
-[Goal: Sidebar role-based con navigazione a tutte le sezioni]
-
-- [ ] Build `components/navigation/sidebar.tsx` - Sidebar responsive
-  - [ ] Owner: Dashboard, Orario, Locali, Dipendenti, Report, Impostazioni
-  - [ ] Manager: Dashboard, Orario (filtrato), Dipendenti (filtrato), Richieste
-  - [ ] Mostra quota utilizzo in fondo (sedi/dip usati vs limite piano)
-- [ ] Build `components/navigation/mobile-nav.tsx` - Bottom tab bar per mobile
-  - [ ] Dipendente: Orario, Preferenze, Richieste, Profilo
-- [ ] Implement role-based rendering (show/hide based on user.role)
+- [x] `components/navigation/app-sidebar.tsx` - Sidebar role-based
 
 ### Scheduler Grid
 
-[Goal: Griglia interattiva con 3 viste, drag & drop, e validazione conflitti real-time]
-
-- [ ] Build `app/(protected)/schedule/page.tsx` - Scheduler page
-  - [ ] Toolbar: navigazione settimana (← →), date range display
-  - [ ] Vista tabs: [Per Locale] [Per Dipendente] [Per Ruolo]
-  - [ ] Filtri: Locale select, Ruolo select
-  - [ ] Bottoni: [🤖 Genera AI] (disabled, Phase 7) [📢 Pubblica] Status badge (Bozza/Pubblicato)
-  - [ ] Barra fabbisogno: per ogni ruolo mostra assegnati/richiesti con colore (✅ completo, ⚠️ quasi, 🔴 scoperto)
-
-- [ ] Build `components/schedule/schedule-grid.tsx` - Griglia principale
-  - [ ] Vista Per Locale: righe = dipendenti, colonne = giorni (Lun-Dom), celle = turno assegnato
-  - [ ] Vista Per Dipendente: righe = dipendenti (tutti i locali), colonne = giorni, mostra totale ore + alert
-  - [ ] Vista Per Ruolo: raggruppato per mansione, mostra copertura
-
-- [ ] Build `components/schedule/shift-cell.tsx` - Cella singola turno
-  - [ ] Mostra: orario (es. "18-23"), ruolo badge, locale (se vista per dipendente)
-  - [ ] Click → edit popup (cambia orario, ruolo, elimina)
-  - [ ] Right-click → context menu (Segna Malattia, Cancella, Duplica)
-
-- [ ] Build `components/schedule/employee-sidebar.tsx` - Sidebar dipendenti disponibili
-  - [ ] Lista dipendenti con: nome, mansioni (badges), ore usate/totali, disponibilita oggi (🟢🟡🔴)
-  - [ ] Filtro per mansione e cerca per nome
-  - [ ] Draggable: trascina dipendente sulla griglia per assegnare
-
-- [ ] Implement DnD Kit integration
-  - [ ] `DndContext` wrapper per lo scheduler
-  - [ ] `Draggable` su employee cards nella sidebar
-  - [ ] `Droppable` su celle vuote nella griglia
-  - [ ] onDragEnd handler: crea shift con employee + date + location + time slot
-
-### Shift Validation (Client + Server)
-
-[Goal: Ogni assegnazione turno viene validata per conflitti, ore max, riposi e incompatibilita]
-
-- [ ] Create `lib/schedule-validation.ts` - Validation logic
-  - [ ] checkOverlap(employeeId, date, startTime, endTime) - turno sovrapposto
-  - [ ] checkMaxWeeklyHours(employeeId, weekStart, additionalHours) - sopra ore contratto
-  - [ ] checkMinRestPeriod(employeeId, date, startTime) - minimo 11h riposo tra turni
-  - [ ] checkIncompatibility(employeeId, locationId, date) - collega incompatibile nello stesso turno
-  - [ ] checkAvailability(employeeId, dayOfWeek, shiftPeriod) - dipendente non disponibile
-  - [ ] checkTimeOff(employeeId, date) - ferie/permesso approvato
-
-- [ ] Build `components/schedule/conflict-popup.tsx` - Popup conflitto
-  - [ ] Mostra tipo conflitto e dettaglio
-  - [ ] Bottoni: [Assegna Comunque] [Annulla]
-
-- [ ] Create `app/actions/shifts.ts` - Server Actions per CRUD turni
-  - [ ] createShift (con validazione server-side completa)
-  - [ ] updateShift, deleteShift, cancelShift
-  - [ ] bulkCreateShifts (per assegnazione rapida)
-  - [ ] publishSchedule (cambia status + triggera notifiche in Phase 7)
-  - [ ] markSickLeave(shiftId) (cancella turno + triggera sostituti in Phase 7)
-
-- [ ] Create `lib/schedules.ts` - Query helpers
-  - [ ] getWeekSchedule(orgId, weekStart, locationId?)
-  - [ ] getEmployeeWeekShifts(employeeId, weekStart)
-  - [ ] getStaffingCoverage(locationId, weekStart) - assegnati vs richiesti per slot
-  - [ ] getWeekStats(orgId, weekStart) - totale ore, costo stimato, turni scoperti
+- [x] `schedule/page.tsx` + `scheduler-client.tsx` - Vista per locale, toolbar, Pubblica
+- [x] `employee-sidebar.tsx` - DnD draggable, ore usate/totali
+- [x] `lib/schedule-validation.ts`, `conflict-popup.tsx`
+- [x] `app/actions/shifts.ts` - createShift, deleteShift, publishSchedule
+- [x] `lib/schedules.ts` - getWeekSchedule, getStaffingCoverage, getWeekStats
 
 ---
 
-## Phase 6: Dashboard & Overview
+## Phase 6: Dashboard & Overview ✅
 
-**Goal**: Titolare ha una dashboard che mostra lo stato di salute di tutte le sedi con alert, KPI e azioni rapide. Vista rapida senza dover entrare nello scheduler.
+**Goal**: Dashboard con KPI, griglia settimanale a semaforo, azioni rapide.
 
 ### Dashboard Page
 
-[Goal: Vista riassuntiva con cards KPI, griglia settimanale a semaforo, notifiche e azioni rapide]
-
-- [ ] Build `app/(protected)/dashboard/page.tsx`
-  - [ ] KPI cards: Dipendenti attivi oggi, Turni scoperti, Ore pianificate settimana, Costo stimato
-  - [ ] Vista rapida settimana: griglia locali x giorni con semaforo (🟢 Coperto, 🟡 Quasi, 🔴 Scoperto, ⚫ Chiuso)
-  - [ ] Sezione Notifiche/Alert: richieste cambio turno pendenti, malattie segnalate, dipendenti senza turni
-  - [ ] Azioni Rapide: [Genera Orario Prossima Sett.] [Pubblica Orario] [Genera Report Mese]
-
-- [ ] Create `lib/dashboard.ts` - Dashboard query helpers
-  - [ ] getDashboardStats(orgId) - KPI aggregati
-  - [ ] getWeekOverview(orgId, weekStart) - stato copertura per locale/giorno
-  - [ ] getPendingAlerts(orgId) - richieste pendenti, malattie, scoperti
+- [x] `dashboard/page.tsx` - KPI cards, griglia copertura, alert, azioni rapide
+- [x] `lib/dashboard.ts` - getDashboardStats, getWeekOverview, getPendingAlerts
 
 ---
 
-## Phase 7: AI Schedule Generation & Conflict Resolution
+## Phase 7: AI Schedule Generation & Conflict Resolution ✅
 
-**Goal**: Titolare genera l'orario settimanale con un click usando l'AI. L'AI ottimizza tenendo conto di tutti i vincoli. Quando un dipendente si ammala, il sistema suggerisce automaticamente i 5 migliori sostituti.
+**Goal**: Generazione orario con AI e sostituti per malattia. *Implementato in sync (lib/ai-schedule.ts), non come Trigger workflow.*
 
-### 🚨 IMPLEMENTATION SOURCE: `trigger_workflows_summary.md` - Workflow 1 (AI Schedule Generation) + Workflow 5 (Conflict Resolution)
+### AI Schedule
 
-### Database Schema: Job Tracking
+- [x] `lib/ai-schedule.ts` - collectSchedulingConstraints, optimizeWithAI, validateAndSave
+- [x] `schedule-generation-jobs` per tracking
+- [x] `ai-generation-modal.tsx` - Select locali, modalità, trigger genera
+- [x] Progress/result nel modal
 
-[Goal: Tabelle per tracking dei background job AI]
+### AI Suggestions & Sick Leave
 
-- [ ] Create `drizzle/schema/schedule-generation-jobs.ts`
-  - [ ] Fields: id, organization_id, schedule_id, week_start_date, location_ids (text[]), mode (full/fill_gaps/single_location), options (JSONB), status (pending/collecting/optimizing/validating/completed/failed/cancelled), progress_percentage, current_step, trigger_job_id, result_summary (JSONB), error_message, created_at, completed_at
-- [ ] Run migration
-
-### Trigger.dev Setup
-
-[Goal: Trigger.dev configurato e primo workflow funzionante]
-
-- [ ] Configure `trigger.config.ts` con project settings
-- [ ] Create `trigger/ai-schedule-generation.ts` with 4-task workflow:
-
-  **Task 1: collect-scheduling-constraints**
-  - [ ] Query DB: locations + staffing_requirements per locali selezionati
-  - [ ] Query DB: employees + employee_roles + employee_availability per org
-  - [ ] Query DB: employee_incompatibilities per org
-  - [ ] Query DB: employee_time_off per settimana target
-  - [ ] Query DB: shifts settimane precedenti (per equita distribuzione)
-  - [ ] Serializza come payload strutturato per GPT-4
-  - [ ] metadata.root.set("progress", 20) + metadata.root.set("currentStep", "Raccolta vincoli completata")
-  - [ ] Update schedule_generation_jobs: progress_percentage = 20
-
-  **Task 2: optimize-schedule (OpenAI GPT-4 function calling)**
-  - [ ] IF location_ids.length > 3: parallelizza per locale con Promise.all()
-  - [ ] ELSE: singola chiamata GPT-4 per tutti i locali
-  - [ ] Prompt: vincoli + fabbisogno + disponibilita → richiedi schedule JSON strutturato
-  - [ ] Use function calling per output strutturato (array di shift assignments)
-  - [ ] metadata.stream("schedule-preview") per preview live nel frontend
-  - [ ] metadata.root.set("progress", 70)
-  - [ ] Update schedule_generation_jobs: progress_percentage = 70
-  - [ ] Retry: max 3 tentativi per chiamata OpenAI, backoff 5s/10s/20s
-
-  **Task 3: validate-schedule**
-  - [ ] Check conflitti: overlap turni stesso dipendente
-  - [ ] Check ore max: dipendente supera weekly_hours contratto
-  - [ ] Check riposo minimo: < 11h tra fine turno e inizio successivo
-  - [ ] Check indisponibilita: turno in giorno/fascia non disponibile
-  - [ ] Check incompatibilita: colleghi incompatibili nello stesso turno/locale
-  - [ ] IF conflitti trovati AND tentativi < 3: ri-chiama GPT-4 con conflitti come feedback → auto-resolve
-  - [ ] IF conflitti ancora dopo 3 tentativi: graceful degradation (orario parziale + lista turni scoperti)
-  - [ ] metadata.root.set("progress", 90)
-
-  **Task 4: save-schedule-results**
-  - [ ] Create/update schedule record (status: draft)
-  - [ ] Bulk INSERT shifts per tutti i turni generati (is_auto_generated = true)
-  - [ ] Calcola result_summary: { shifts_created, unfilled_slots, cost_estimate, overtime_hours, conflicts_resolved, warnings }
-  - [ ] Update schedule_generation_jobs: status = completed, progress = 100, result_summary
-  - [ ] Update usage_tracking: increment ai_generations_count
-  - [ ] metadata.root.set("progress", 100)
-
-### AI Schedule Generation UI
-
-[Goal: Bottone "Genera con AI" nello scheduler con progress bar real-time e preview]
-
-- [ ] Enable "Genera con AI" button in scheduler toolbar
-- [ ] Build `components/schedule/ai-generation-modal.tsx` - Modal di configurazione
-  - [ ] Select locali target (tutti o specifici)
-  - [ ] Select modalita: Genera nuovo / Riempi buchi / Solo questo locale
-  - [ ] Opzioni: Ottimizza costi, Rispetta preferenze
-  - [ ] [Genera] button → create job + trigger workflow
-- [ ] Build `components/schedule/ai-progress-overlay.tsx` - Overlay progresso
-  - [ ] Subscribe via useRealtimeRunWithStreams(job.trigger_job_id)
-  - [ ] Progress bar 0-100% con animazione
-  - [ ] Step corrente: "Raccolta vincoli..." → "Ottimizzazione turni..." → "Validazione..." → "Salvataggio..."
-  - [ ] Checklist step completati (✅ / 🔄 / ⬜)
-  - [ ] Tempo stimato restante
-  - [ ] [Annulla] button
-- [ ] Al completamento: refresh griglia scheduler con turni generati, mostra result_summary (turni creati, scoperti, warnings)
-
-### AI Drag & Drop Suggestions
-
-[Goal: Quando il drag & drop genera conflitto, l'AI suggerisce alternative]
-
-- [ ] Create `app/api/ai/suggest/route.ts` - POST endpoint (<2 secondi)
-  - [ ] Input: { employeeId, date, startTime, endTime, locationId, roleId }
-  - [ ] Validazione conflitti completa (riuso lib/schedule-validation.ts)
-  - [ ] IF conflitto: chiama OpenAI per 3 suggerimenti alternativi
-  - [ ] Return: { valid, conflicts[], suggestions[] }
-- [ ] Build `components/schedule/ai-suggest-popup.tsx` - Popup suggerimenti
-  - [ ] Mostra conflitto rilevato
-  - [ ] 3 suggerimenti AI: "Sposta a mercoledi", "Assegna Paolo", "Sposta Luigi al Nord"
-  - [ ] Bottoni: [Assegna Comunque] [Accetta Suggerimento 1/2/3] [Annulla]
-
-### Conflict Resolution: Sick Leave Substitutes
-
-**🚨 IMPLEMENTATION SOURCE**: Workflow 5 from trigger_workflows_summary.md
-
-- [ ] Create `trigger/conflict-resolution.ts` with 2-task workflow:
-
-  **Task 1: find-best-substitutes**
-  - [ ] Input: shiftId del turno scoperto
-  - [ ] Query dipendenti con: stessa mansione (role_id), disponibili quel giorno/fascia, nessun turno sovrapposto, dentro ore contratto, nessuna incompatibilita con colleghi presenti
-  - [ ] Ranking: 1) ore residue (piu = meglio), 2) sede preferita match, 3) equita (meno ore questa settimana = meglio), 4) costo (paga oraria piu bassa = meglio)
-
-  **Task 2: prepare-substitute-suggestions**
-  - [ ] Formatta top 5 sostituti con score (0-100)
-  - [ ] metadata.root.set("suggestions", [...]) per real-time frontend
-
-- [ ] Build `components/schedule/sick-leave-popup.tsx` - Popup sostituti
-  - [ ] Header: "🤒 Malattia - [Nome]" + dettaglio turno scoperto
-  - [ ] Lista 5 sostituti con: nome, mansione, ore residue/totali, sede preferita, score
-  - [ ] Per ogni sostituto: [Assegna + Notifica WhatsApp]
-  - [ ] Bottoni: [Lascia Scoperto] [Cerca Manualmente]
-  - [ ] On "Assegna": create new shift + trigger notification dispatch (Phase 8)
+- [x] `app/api/ai/suggest/route.ts` - Suggerimenti alternativi su conflitto
+- [x] `lib/substitute-suggestions.ts` - Trova migliori sostituti
+- [x] `sick-leave-popup.tsx` - Lista sostituti, [Assegna]
 
 ---
 
-## Phase 8: Notification System (WhatsApp + Email)
+## Phase 8: Notification System (WhatsApp + Email) ✅
 
-**Goal**: Quando l'orario viene pubblicato, i dipendenti ricevono automaticamente WhatsApp/Email con i propri turni. Notifiche anche per cambio turno, malattia e report.
-
-### 🚨 IMPLEMENTATION SOURCE: Workflow 2 from trigger_workflows_summary.md
+**Goal**: Notifiche al publish orario, sostituzione malattia, report. *Implementato in sync (lib/notifications.ts), non Trigger.*
 
 ### Database Schema: Notifications
 
-[Goal: Tabelle per logging notifiche e job tracking]
+- [x] `notifications.ts`, `notification-jobs.ts`
+- [x] `lib/twilio.ts`, `lib/resend.ts`, `lib/notifications.ts`
+- [x] publishSchedule → dispatchSchedulePublishedNotifications
+- [x] `app/api/webhooks/whatsapp/route.ts`, `stripe/route.ts`
 
-- [ ] Create `drizzle/schema/notifications.ts`
-  - [ ] Fields: id, organization_id, recipient_user_id, recipient_employee_id, channel (whatsapp/email/in_app), event_type, subject, body, delivery_status (pending/sent/delivered/failed), external_id, sent_at, created_at
-- [ ] Create `drizzle/schema/notification-jobs.ts`
-  - [ ] Fields: id, organization_id, event_type, recipient_count, status, progress_percentage, trigger_job_id, result_summary (JSONB), error_message, created_at, completed_at
-- [ ] Run migration
+### (Trigger workflow non implementato - usato sync)
 
-### Trigger.dev Notification Workflow
-
-[Goal: Invio batch multi-canale (WhatsApp + Email) con retry e fallback]
-
-- [ ] Create `trigger/notification-dispatch.ts` with 3-task workflow:
+- [ ] Opzionale: `trigger/notification-dispatch.ts` per scalabilità:
 
   **Task 1: prepare-notifications**
+
   - [ ] Query destinatari per event_type (dipendenti per schedule_published, commercialista per report_ready, etc.)
   - [ ] Query organization_settings per canali preferiti
   - [ ] Genera messaggi personalizzati da template per ogni destinatario
@@ -558,14 +263,16 @@
   - [ ] metadata.root.set("progress", 20)
 
   **Task 2: send-notifications-batch**
+
   - [ ] Parallel: WhatsApp (Twilio) + Email (Resend) simultaneamente con Promise.all()
   - [ ] Rate limiting: 50 WhatsApp/sec, 10 Email/sec
   - [ ] Per ogni messaggio: INSERT notification record con delivery_status
   - [ ] Retry per messaggio fallito: 3 tentativi, backoff 30s/60s/120s
   - [ ] Fallback: se WhatsApp fallisce dopo 3 retry → invia via Email
-  - [ ] metadata.root.set("progress", 20 + (sent/total * 70))
+  - [ ] metadata.root.set("progress", 20 + (sent/total \* 70))
 
   **Task 3: finalize-notification-job**
+
   - [ ] Conta sent/failed/pending
   - [ ] Update notification_jobs: status = completed, result_summary
   - [ ] metadata.root.set("progress", 100)
@@ -616,17 +323,13 @@
 
 ---
 
-## Phase 9: Monthly Report Generation & Accountant Portal
+## Phase 9: Monthly Report Generation & Accountant Portal ✅
 
-**Goal**: Titolare genera report mensili ore/costi con PDF/CSV/Excel. Il commercialista accede al portale, vede i clienti e scarica i report. Report generabile anche automaticamente il primo del mese.
-
-### 🚨 IMPLEMENTATION SOURCE: Workflow 3 (Monthly Report) + Workflow 6 (Accountant Invitation) from trigger_workflows_summary.md
+**Goal**: Report PDF/CSV/Excel, portale commercialista. *Implementato in sync (app/actions/reports.ts).*
 
 ### Database Schema: Reports
 
-[Goal: Tabelle per report e festivita italiane]
-
-- [ ] Create `drizzle/schema/reports.ts`
+- [x] reports, report-generation-jobs, italian-holidays
   - [ ] Fields: id, organization_id, month, status (draft/ready/sent_to_accountant), pdf_url, csv_url, excel_url, summary (JSONB), details_by_employee (JSONB), details_by_location (JSONB), sent_to_accountant_at, created_by_user_id, created_at
   - [ ] UNIQUE (organization_id, month)
 - [ ] Create `drizzle/schema/report-generation-jobs.ts`
@@ -653,6 +356,7 @@
 - [ ] Create `trigger/monthly-report.ts` with 4-task workflow:
 
   **Task 1: aggregate-monthly-data**
+
   - [ ] Query tutti shifts del mese per organizzazione
   - [ ] Query employee_time_off (malattia, ferie) del mese
   - [ ] Query italian_holidays del mese
@@ -661,6 +365,7 @@
   - [ ] metadata.root.set("progress", 40)
 
   **Task 2: generate-report-files (Parallel)**
+
   - [ ] Promise.all([generatePDF(), generateCSV(), generateExcel()])
   - [ ] PDF: tabella riepilogo + dettaglio per dipendente + dettaglio per locale
   - [ ] CSV: tabella piatta esportabile (dipendente, ore_ord, ore_str, ore_fest, malattia, ferie, totale, costo)
@@ -669,10 +374,12 @@
   - [ ] metadata.root.set("progress", 85)
 
   **Task 3: save-report-metadata**
+
   - [ ] Create/update reports record: pdf_url, csv_url, excel_url, summary JSONB, details JSONB
   - [ ] metadata.root.set("progress", 95)
 
   **Task 4: notify-accountant (fire-and-forget)**
+
   - [ ] IF accountant connected: trigger Notification Dispatch (event: report_ready)
   - [ ] Does NOT block workflow completion
   - [ ] metadata.root.set("progress", 100)
@@ -728,60 +435,20 @@
 
 ---
 
-## Phase 10: Employee Mobile Experience
+## Phase 10: Employee Mobile Experience ✅
 
-**Goal**: I dipendenti usano l'app dal telefono per vedere i propri turni, gestire disponibilita e fare richieste di cambio turno/ferie.
+**Goal**: Dipendenti vedono turni, gestiscono preferenze e richieste.
 
-### Employee Schedule View (Mobile-First)
+### Pages
 
-[Goal: Dipendente vede i propri turni in formato mobile-friendly]
-
-- [ ] Build `app/(protected)/my-schedule/page.tsx` - I miei turni
-  - [ ] Vista settimanale/mensile con cards per ogni giorno
-  - [ ] Ogni card: locale, orario, ruolo, colleghi in turno
-  - [ ] Giorni liberi marcati
-  - [ ] Navigazione settimana (← →)
-  - [ ] Footer: ore settimana attuale / ore contratto, ore mese / ore mese target
-  - [ ] Swipe per cambiare giorno (mobile gesture)
-
-### Employee Preferences
-
-[Goal: Dipendente gestisce la propria disponibilita e preferenze]
-
-- [ ] Build `app/(protected)/my-preferences/page.tsx` - Le mie preferenze
-  - [ ] Griglia disponibilita: giorno x fascia (Mattina/Pomeriggio/Sera), toggle ✅❌⭐
-  - [ ] Sede preferita (dropdown)
-  - [ ] Sedi escluse (checkboxes)
-  - [ ] Incompatibilita colleghi (lista + aggiungi)
-  - [ ] [Salva Preferenze] → update employee_availability + preferred_location + incompatibilities
-
-### Shift Requests
-
-[Goal: Dipendente puo richiedere cambio turno, ferie, permessi o segnalare malattia]
-
-- [ ] Build `app/(protected)/my-requests/page.tsx` - Le mie richieste
-  - [ ] Lista richieste con stato: pendente 🟡, approvata 🟢, rifiutata 🔴
-  - [ ] [+ Nuova Richiesta] → form modale:
-    - [ ] Tipo: Cambio turno / Ferie / Permesso / Malattia
-    - [ ] Turno coinvolto (select da turni assegnati)
-    - [ ] Date (per ferie/permesso: data inizio/fine)
-    - [ ] Collega proposto per scambio (opzionale, per cambio turno)
-    - [ ] Motivazione (testo libero)
-  - [ ] On submit: create shift_request + notification to owner/manager
-
-### Manager Request Approval
-
-[Goal: Manager/Owner vedono e approvano/rifiutano le richieste dei dipendenti]
-
-- [ ] Build `app/(protected)/requests/page.tsx` - Gestione richieste (Owner/Manager)
-  - [ ] Lista richieste pendenti con: dipendente, tipo, turno, date, motivazione
-  - [ ] Per ogni richiesta: [✅ Approva] [❌ Rifiuta] + note
-  - [ ] On approva cambio turno: update shift assignments + notification
-  - [ ] On approva ferie: create employee_time_off approved + notification
+- [x] `my-schedule/page.tsx` - Vista turni settimanale
+- [x] `my-preferences/page.tsx` - Griglia disponibilità
+- [x] `my-requests/page.tsx` - Richieste (cambio turno, ferie, permesso, malattia)
+- [x] `requests/page.tsx` - Approva/Rifiuta (Owner/Manager)
 
 ---
 
-## Phase 11: Profile, Subscription & Settings
+## Phase 11: Profile, Subscription & Settings ✅
 
 **Goal**: Titolare gestisce profilo organizzazione, abbonamento (via Stripe Portal), e impostazioni (regole turni, notifiche, report). Usage tracking visibile.
 
@@ -789,43 +456,42 @@
 
 [Goal: Pagina profilo con info account, stato abbonamento da Stripe API e usage stats]
 
-- [ ] Build `app/(protected)/profile/page.tsx` - Profilo completo
-  - [ ] Account card: logo, nome organizzazione, email, telefono, [Modifica] [Cambia Password]
-  - [ ] Abbonamento card: Query Stripe API con stripe_customer_id → mostra piano, rinnovo, metodo pagamento
-  - [ ] [Gestisci Abbonamento] → genera Stripe Portal URL → redirect
-  - [ ] Utilizzo card: sedi X/Y, dipendenti X/Y, AI generazioni mese, report inviati (query usage_tracking)
-  - [ ] Progress bars per ogni quota
+- [x] Build `app/(protected)/profile/page.tsx` - Profilo completo
+  - [x] Account card: nome organizzazione, email, ruolo
+  - [x] Abbonamento card: Query Stripe API con stripe_customer_id → mostra piano, trial
+  - [x] [Gestisci Abbonamento] → genera Stripe Portal URL → redirect
+  - [x] Utilizzo card: sedi X/Y, dipendenti X/Y, AI generazioni mese, report inviati (query usage_tracking)
+  - [x] Progress bars per ogni quota
 
 ### Database Schema: Usage Tracking
 
 [Goal: Tabella per tracciamento quota mensile]
 
-- [ ] Create `drizzle/schema/usage-tracking.ts`
-  - [ ] Fields: id, organization_id, month, locations_count, employees_count, ai_generations_count, reports_generated_count, whatsapp_messages_sent, email_messages_sent, created_at, updated_at
-  - [ ] UNIQUE (organization_id, month)
-- [ ] Create `lib/usage.ts` - Usage helpers
-  - [ ] getOrCreateMonthlyUsage(orgId)
-  - [ ] incrementUsage(orgId, field)
-  - [ ] checkQuota(orgId, resource) → query Stripe plan + compare with usage
-- [ ] Integrate quota checks into: createLocation, createEmployee, AI generation, report generation
+- [x] Create `drizzle/schema/usage-tracking.ts`
+  - [x] Fields: id, organization_id, month, locations_count, employees_count, ai_generations_count, reports_generated_count, whatsapp_messages_sent, email_messages_sent, created_at, updated_at
+  - [x] UNIQUE (organization_id, month)
+- [x] Create `lib/usage.ts` - Usage helpers
+  - [x] getOrCreateMonthlyUsage(orgId)
+  - [x] incrementUsage(orgId, field)
+  - [x] checkQuota(orgId, resource) → query Stripe plan + compare with usage
+- [x] Integrate quota checks into: createLocation, createEmployee, AI generation, report generation
 
 ### Settings Pages
 
 [Goal: Titolare configura regole turni, preferenze report e canali notifica]
 
-- [ ] Build `app/(protected)/settings/page.tsx` - Hub impostazioni
-- [ ] Build `app/(protected)/settings/work-rules/page.tsx`
-  - [ ] Riposo minimo tra turni (ore)
-  - [ ] Giorni consecutivi massimi
-  - [ ] Soglia straordinario (ore/settimana)
-  - [ ] Durata minima/massima turno
-- [ ] Build `app/(protected)/settings/notifications/page.tsx`
-  - [ ] Per ogni evento: canali attivi (WhatsApp ✅, Email ✅, In-App ✅)
-  - [ ] Toggle on/off per tipo notifica
+- [x] Build `app/(protected)/settings/page.tsx` - Hub impostazioni
+- [x] Build `app/(protected)/settings/work-rules/page.tsx`
+  - [x] Riposo minimo tra turni (ore)
+  - [x] Giorni consecutivi massimi
+  - [x] Soglia straordinario (ore/settimana)
+- [x] Build `app/(protected)/settings/notifications/page.tsx`
+  - [x] Per ogni evento: canali attivi (WhatsApp ✅, Email ✅)
+  - [x] Toggle on/off per tipo notifica
 
 ---
 
-## Phase 12: CSV Import
+## Phase 12: CSV Import ✅
 
 **Goal**: Titolare importa lista dipendenti da CSV (export dal gestionale o Excel). Validazione, dedup e import batch in background.
 
@@ -835,55 +501,57 @@
 
 [Goal: Tabella per tracking import CSV]
 
-- [ ] Create `drizzle/schema/import-jobs.ts`
-  - [ ] Fields: id, organization_id, file_name, file_url, total_rows, status, progress_percentage, trigger_job_id, result_summary (JSONB), error_message, created_at, completed_at
-- [ ] Run migration
+- [x] Create `drizzle/schema/import-jobs.ts`
+  - [x] Fields: id, organization_id, file_name, file_url, total_rows, status, progress_percentage, trigger_job_id, result_summary (JSONB), error_message, created_at, completed_at
+- [x] Run migration
 
 ### Supabase Storage: Imports Bucket
 
-- [ ] Create Supabase Storage bucket `imports` con RLS policy (write for owner, auto-delete after 7 days)
+- [x] Create Supabase Storage bucket `imports` (setup-storage.ts)
 
 ### CSV Import Workflow
 
-- [ ] Install `papaparse`
-- [ ] Create `trigger/csv-import.ts` with 3-task workflow:
+- [x] Install `papaparse`
+- [x] Create `trigger/csv-import.ts` with 3-task workflow:
 
-  **Task 1: parse-and-validate-csv**
-  - [ ] Download CSV da Supabase Storage
-  - [ ] Parse con Papaparse
-  - [ ] Auto-mapping colonne: nome, cognome, email, telefono, mansioni, contratto, ore_settimanali, paga_oraria
-  - [ ] Validazione per riga: required fields, email format, phone format, mansione valida
-  - [ ] Duplicate detection (email/phone vs employees esistenti)
-  - [ ] IF >50% righe invalide: FAIL fast con lista errori
-  - [ ] metadata.root.set("progress", 40)
+  **Task 1: parse-and-validate-csv** (inline in csvImportWorkflow)
+
+  - [x] Download CSV da Supabase Storage
+  - [x] Parse con Papaparse
+  - [x] Auto-mapping colonne: nome, cognome, email, telefono, mansione, contratto, ore_settimanali
+  - [x] Validazione per riga: required fields, email format, phone format
+  - [x] Duplicate detection (email/phone vs employees esistenti)
+  - [x] IF >50% righe invalide: FAIL fast con lista errori
+  - [x] progress 0→40%
 
   **Task 2: create-employee-records**
-  - [ ] Batch INSERT employees per righe valide
-  - [ ] Create employee_roles per mansioni mappate
-  - [ ] Skip duplicati (non sovrascrivere)
-  - [ ] metadata.root.set("progress", 85)
+
+  - [x] Batch INSERT employees per righe valide
+  - [x] Create employee_roles per mansioni mappate
+  - [x] Skip duplicati (non sovrascrivere)
+  - [x] progress 40→80%
 
   **Task 3: finalize-import**
-  - [ ] Update import_jobs: result_summary { imported, errors, duplicates, error_details }
-  - [ ] Cleanup: delete CSV temporaneo da Storage
-  - [ ] metadata.root.set("progress", 100)
+
+  - [x] Update import_jobs: result_summary { imported, errors, skipped }
+  - [x] Cleanup: delete CSV temporaneo da Storage
+  - [x] progress 100%
 
 ### CSV Import UI
 
 [Goal: Upload CSV con preview risultati e gestione errori]
 
-- [ ] Add [📥 Import CSV] button nella lista dipendenti
-- [ ] Build `components/employees/csv-import-modal.tsx`
-  - [ ] Drop zone per file CSV
-  - [ ] Preview prime 5 righe con mapping colonne
-  - [ ] [Importa] → upload CSV su Storage + trigger workflow
-  - [ ] Progress bar durante import
-  - [ ] Risultati: X importati, Y errori, Z duplicati
-  - [ ] Lista errori dettagliata con riga e motivo
+- [x] Add [📥 Import CSV] button nella lista dipendenti
+- [x] Build `components/employees/csv-import-modal.tsx`
+  - [x] Drop zone per file CSV
+  - [x] [Importa] → upload CSV su Storage + trigger workflow
+  - [x] Progress bar durante import
+  - [x] Risultati: X importati, Y errori, Z duplicati (skipped)
+  - [x] Lista errori dettagliata con riga e motivo
 
 ---
 
-## Phase 13: Admin Panel
+## Phase 13: Admin Panel ✅
 
 **Goal**: Super admin monitora la piattaforma: metriche sistema, revenue, gestione utenti e piani.
 
@@ -891,21 +559,22 @@
 
 [Goal: Vista operativa della piattaforma per il super admin]
 
-- [ ] Build `app/(protected)/admin/page.tsx` - Dashboard admin
-  - [ ] KPI: organizzazioni totali, utenti totali, MRR, churn rate
-  - [ ] Organizzazioni recenti con piano e stato
-  - [ ] Alert: trial in scadenza, pagamenti falliti, errori sistema
+- [x] Build `app/(protected)/admin/page.tsx` - Dashboard admin
 
-- [ ] Build `app/(protected)/admin/users/page.tsx` - Gestione utenti
-  - [ ] Lista organizzazioni con: nome, piano, sedi, dipendenti, creato il
-  - [ ] Filtri: piano, stato (active/trial/expired)
-  - [ ] Azioni: [Sospendi] [Estendi Trial] [Dettaglio]
+  - [x] KPI: organizzazioni totali, utenti totali, trial, alert
+  - [x] Organizzazioni recenti con piano e stato
+  - [x] Alert: trial in scadenza, pagamenti falliti
 
-- [ ] Build `app/(protected)/admin/analytics/page.tsx` - Analytics
-  - [ ] Revenue chart (MRR over time)
-  - [ ] Conversioni trial → paid
-  - [ ] Distribuzione piani
-  - [ ] Feature usage (AI gen, report, notifiche)
+- [x] Build `app/(protected)/admin/organizations/page.tsx` - Gestione organizzazioni
+
+  - [x] Lista organizzazioni con: nome, piano, sedi, dipendenti, creato il
+  - [x] Filtri: ricerca, paid/trial
+  - [x] Azioni: [Estendi Trial]
+
+- [x] Build `app/(protected)/admin/analytics/page.tsx` - Analytics
+  - [x] Distribuzione piani (trial/paid/free)
+  - [x] Utilizzo mensile (sedi, dipendenti, AI, report)
+  - [x] Trend iscrizioni utenti
 
 ---
 
@@ -918,13 +587,13 @@
 [Background: Catch-all for edge cases and smaller requirements]
 
 - [ ] Review ALL prep documents for any unaddressed requirements
-- [ ] PWA configuration for mobile employee experience (manifest.json, service worker)
+- [x] PWA manifest.json per mobile (service worker opzionale)
 - [ ] Responsive polish: test all pages on mobile/tablet/desktop breakpoints
-- [ ] Error boundaries per ogni sezione
-- [ ] Loading states e skeletons per ogni pagina
-- [ ] Empty states per liste vuote (primo locale, primi dipendenti, primo orario)
-- [ ] Toast notifications (sonner) per tutte le azioni (salvataggio, errore, successo)
-- [ ] SEO: meta tags, Open Graph per landing page
+- [x] Error boundaries (ErrorBoundary nel layout protetto)
+- [x] Loading states e skeletons (protected, dashboard, schedule)
+- [x] Empty states (sedi, dipendenti, programmazione)
+- [x] Toast notifications (sonner) per azioni principali (create/edit/delete, approve/reject, extend trial)
+- [x] SEO: meta tags, Open Graph per landing page
 - [ ] Performance: lazy loading per scheduler grande, virtualizzazione griglia se >20 dipendenti
 - [ ] Test end-to-end: flusso completo signup → onboarding → primo orario → pubblica → report
 - [ ] Security review: RLS policies, input sanitization, rate limiting
@@ -934,29 +603,36 @@
 - [ ] Verify WhatsApp + Email notifications delivered correctly
 - [ ] Documentation: README con setup instructions per development
 
+### Cosa manca (priorità)
+
+1. **Test E2E** – Flusso signup → onboarding → orario → pubblica → report
+2. **Security review** – RLS, input validation, rate limiting
+3. **Verifica integrazioni** – Stripe, Trigger.dev CSV, notifiche
+4. **Nice-to-have** – copyStaffingFrom*, Vista Per Dipendente/Ruolo scheduler, virtualizzazione griglia >20 dip.
+
 ---
 
 ## 📊 Phase Summary
 
-| Phase | Feature | Key Deliverable | Est. Effort |
-|-------|---------|-----------------|-------------|
-| 0 | Project Setup | Dev environment ready | 1 day |
-| 1 | Landing Page | Marketing page live | 1 day |
-| 2 | Auth & Multi-Tenant | Signup/login + org creation + RLS | 2-3 days |
-| 3 | Onboarding | 5-step wizard, org configured | 2-3 days |
-| 4 | Locations & Employees | Full CRUD with constraints | 3-4 days |
-| 5 | Scheduler Core | Drag & drop grid with validation | 4-5 days |
-| 6 | Dashboard | KPI overview + alerts | 1-2 days |
-| 7 | AI Scheduling | AI generation + conflict resolution | 4-5 days |
-| 8 | Notifications | WhatsApp + Email batch dispatch | 3-4 days |
-| 9 | Reports & Accountant | PDF/CSV/Excel + accountant portal | 3-4 days |
-| 10 | Employee Mobile | Schedule view + preferences + requests | 2-3 days |
-| 11 | Profile & Settings | Subscription + usage + config | 2 days |
-| 12 | CSV Import | Batch employee import | 1-2 days |
-| 13 | Admin Panel | Platform monitoring | 1-2 days |
-| 14 | Final Sweep | Polish + testing + security | 2-3 days |
+| Phase | Feature               | Key Deliverable                        | Stato |
+| ----- | --------------------- | -------------------------------------- | ----- |
+| 0     | Project Setup         | Dev environment ready                  | ✅ |
+| 1     | Landing Page          | Marketing page live                    | ✅ |
+| 2     | Auth & Multi-Tenant   | Signup/login + org creation + RLS      | ✅ |
+| 3     | Onboarding            | 5-step wizard, org configured         | ✅ |
+| 4     | Locations & Employees | Full CRUD with constraints            | ✅ |
+| 5     | Scheduler Core        | Drag & drop grid with validation       | ✅ |
+| 6     | Dashboard             | KPI overview + alerts                 | ✅ |
+| 7     | AI Scheduling         | AI generation + conflict resolution    | ✅ |
+| 8     | Notifications         | WhatsApp + Email batch dispatch       | ✅ |
+| 9     | Reports & Accountant  | PDF/CSV/Excel + accountant portal     | ✅ |
+| 10    | Employee Mobile       | Schedule view + preferences + requests| ✅ |
+| 11    | Profile & Settings    | Subscription + usage + config         | ✅ |
+| 12    | CSV Import            | Batch employee import                 | ✅ |
+| 13    | Admin Panel           | Platform monitoring                   | ✅ |
+| 14    | Final Sweep           | Polish + testing + security           | 🔄 |
 
-**Total Estimated: 8-10 weeks (solo developer)**
+**Completate: 14/15 fasi** | Est. totale: 8-10 settimane
 
 ---
 

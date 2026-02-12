@@ -11,9 +11,8 @@ import {
 } from "@/drizzle/schema";
 
 export const PERIOD_TIMES: Record<string, { start: string; end: string }> = {
-  morning: { start: "08:00", end: "13:00" },
-  afternoon: { start: "13:00", end: "18:00" },
-  evening: { start: "18:00", end: "23:00" },
+  morning: { start: "08:00", end: "14:00" },
+  evening: { start: "14:00", end: "23:00" },
 };
 
 /** Get week start (Monday) for a date string YYYY-MM-DD */
@@ -102,6 +101,36 @@ export async function getEmployeeWeekShifts(
     .orderBy(shifts.date, shifts.start_time);
 }
 
+/** Get employee shifts with location/role names for My Schedule view */
+export async function getEmployeeWeekShiftsWithDetails(
+  employeeId: string,
+  weekStart: string
+) {
+  const weekEnd = format(addDays(parseISO(weekStart), 6), "yyyy-MM-dd");
+  return db
+    .select({
+      id: shifts.id,
+      date: shifts.date,
+      start_time: shifts.start_time,
+      end_time: shifts.end_time,
+      break_minutes: shifts.break_minutes,
+      location_name: locations.name,
+      role_name: roles.name,
+    })
+    .from(shifts)
+    .innerJoin(locations, eq(shifts.location_id, locations.id))
+    .innerJoin(roles, eq(shifts.role_id, roles.id))
+    .where(
+      and(
+        eq(shifts.employee_id, employeeId),
+        gte(shifts.date, weekStart),
+        lte(shifts.date, weekEnd),
+        eq(shifts.status, "active")
+      )
+    )
+    .orderBy(shifts.date, shifts.start_time);
+}
+
 export type CoverageSlot = {
   locationId: string;
   locationName: string;
@@ -180,8 +209,7 @@ export async function getStaffingCoverage(
       (d.getTime() - weekStartDate.getTime()) / (24 * 60 * 60 * 1000)
     );
     let period = "morning";
-    if (startTime >= "18:00") period = "evening";
-    else if (startTime >= "13:00") period = "afternoon";
+    if (startTime >= "14:00") period = "evening";
     return { day: dayNum, period };
   };
 

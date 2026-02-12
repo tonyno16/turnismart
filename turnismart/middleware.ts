@@ -7,6 +7,7 @@ const authPaths = ["/auth/login", "/auth/sign-up", "/auth/forgot-password", "/au
 function isPublicPath(pathname: string): boolean {
   if (publicPaths.some((p) => pathname === p)) return true;
   if (pathname.startsWith("/auth/")) return true;
+  if (pathname === "/manifest.json") return true; // PWA manifest - must be public
   return false;
 }
 
@@ -45,6 +46,11 @@ export async function middleware(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+
+  // Redirect /login -> /auth/login (common shorthand)
+  if (pathname === "/login") {
+    return NextResponse.redirect(new URL("/auth/login", request.url));
+  }
 
   if (!user) {
     if (!isPublicPath(pathname)) {

@@ -1,10 +1,20 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { format, addDays, startOfWeek } from "date-fns";
+import { it } from "date-fns/locale";
 import { updateStaffingRequirements } from "@/app/actions/locations";
 
 const DAYS = 7;
-const PERIODS = ["morning", "afternoon", "evening"] as const;
+const PERIODS = ["morning", "evening"] as const;
+
+function getWeekDates() {
+  const today = new Date();
+  const weekStart = startOfWeek(today, { weekStartsOn: 1 });
+  return Array.from({ length: 7 }, (_, i) =>
+    format(addDays(weekStart, i), "EEE d MMM", { locale: it })
+  );
+}
 
 type StaffingItem = {
   id: string;
@@ -63,23 +73,46 @@ export function LocationStaffingGrid({
     });
   };
 
-  const periodLabels = ["M", "P", "S"];
-  const dayLabels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+  const periodLabels: Record<string, string> = {
+    morning: "Mattina",
+    evening: "Sera",
+  };
+  const weekDates = getWeekDates();
 
   return (
     <div className="mt-4">
+      <p className="mb-2 text-xs text-zinc-500">
+        Fabbisogno ricorrente settimanale. Ogni giorno ha due turni: Mattina (08–14) e Sera (14–23).
+      </p>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[400px] text-sm">
+        <table className="w-full min-w-[500px] text-sm">
           <thead>
             <tr className="border-b border-zinc-200 dark:border-zinc-700">
-              <th className="p-2 text-left font-medium">Ruolo</th>
-              {dayLabels.flatMap((_, d) =>
-                periodLabels.map((_, p) => (
+              <th rowSpan={2} className="p-2 text-left font-medium">
+                Ruolo
+              </th>
+              {weekDates.map((dateLabel, d) => (
+                <th
+                  key={d}
+                  colSpan={2}
+                  className="border-l border-zinc-200 p-1 text-center text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
+                >
+                  {dateLabel}
+                </th>
+              ))}
+            </tr>
+            <tr className="border-b border-zinc-200 dark:border-zinc-700">
+              {weekDates.flatMap((_, d) =>
+                PERIODS.map((period) => (
                   <th
-                    key={`${d}-${p}`}
-                    className="p-1 text-center text-xs text-zinc-500"
+                    key={`${d}-${period}`}
+                    className={`border-l border-zinc-100 p-1 text-center text-xs dark:border-zinc-800 ${
+                      period === "morning"
+                        ? "bg-amber-50 text-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+                        : "bg-slate-100 text-slate-700 dark:bg-slate-800/50 dark:text-slate-300"
+                    }`}
                   >
-                    {p === 1 ? dayLabels[d] : ""}
+                    {periodLabels[period]}
                   </th>
                 ))
               )}
@@ -89,12 +122,20 @@ export function LocationStaffingGrid({
             {roles.map((role) => (
               <tr key={role.id} className="border-b border-zinc-100 dark:border-zinc-800">
                 <td className="p-2 font-medium">{role.name}</td>
-                {Array.from({ length: DAYS * 3 }, (_, i) => {
-                  const day = Math.floor(i / 3);
-                  const period = PERIODS[i % 3];
+                {Array.from({ length: DAYS * 2 }, (_, i) => {
+                  const day = Math.floor(i / 2);
+                  const period = PERIODS[i % 2];
                   const key = `${role.id}_${day}_${period}`;
+                  const isMorning = period === "morning";
                   return (
-                    <td key={key} className="p-1">
+                    <td
+                      key={key}
+                      className={`p-1 border-l border-zinc-100 dark:border-zinc-800 ${
+                        isMorning
+                          ? "bg-amber-50/50 dark:bg-amber-900/10"
+                          : "bg-slate-50/50 dark:bg-slate-800/20"
+                      }`}
+                    >
                       <input
                         type="number"
                         min={0}
@@ -106,7 +147,7 @@ export function LocationStaffingGrid({
                             [key]: parseInt(e.target.value, 10) || 0,
                           }))
                         }
-                        className="w-10 rounded border px-1 py-0.5 text-center text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                        className="w-10 rounded border border-zinc-200 px-1 py-0.5 text-center text-sm dark:border-zinc-500 dark:bg-zinc-700 dark:text-white"
                       />
                     </td>
                   );

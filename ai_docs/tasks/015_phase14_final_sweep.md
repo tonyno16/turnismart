@@ -49,17 +49,17 @@ After all feature phases are complete, the application needs final polish: PWA c
 - [ ] **Task 1.2:** Create list of missing items
 
 ### Phase 2: PWA & Mobile
-- [ ] **Task 2.1:** Configure PWA (manifest.json, service worker)
+- [x] **Task 2.1:** Configure PWA (manifest.json, metadata manifest link)
 - [ ] **Task 2.2:** Responsive testing on all breakpoints
 
 ### Phase 3: UX Polish
-- [ ] **Task 3.1:** Add error boundaries per section
-- [ ] **Task 3.2:** Add loading states and skeletons for every page
-- [ ] **Task 3.3:** Add empty states for all lists
-- [ ] **Task 3.4:** Add toast notifications (sonner) for all actions
+- [x] **Task 3.1:** Add error boundaries (ErrorBoundary in protected layout)
+- [x] **Task 3.2:** Add loading states and skeletons (loading.tsx protected, dashboard, schedule)
+- [x] **Task 3.3:** Add empty states (sedi, dipendenti già presenti; programmazione aggiunto)
+- [x] **Task 3.4:** Add toast notifications (sonner) for key actions (create/edit/delete, approve/reject, extend trial)
 
 ### Phase 4: SEO & Performance
-- [ ] **Task 4.1:** Add SEO meta tags and Open Graph
+- [x] **Task 4.1:** Add SEO meta tags and Open Graph (keywords, OG in root layout)
 - [ ] **Task 4.2:** Lazy loading for large scheduler
 - [ ] **Task 4.3:** Grid virtualization for >20 employees
 
@@ -81,7 +81,13 @@ After all feature phases are complete, the application needs final polish: PWA c
 
 ## 12. Task Completion Tracking
 
-_(To be updated during implementation)_
+- [x] Error boundary nel layout protetto
+- [x] Toast (sonner) per azioni principali
+- [x] SEO meta + Open Graph
+- [x] PWA manifest.json
+- [x] Loading skeleton (protected, dashboard, schedule)
+- [x] Empty state programmazione (sedi/dipendenti vuoti)
+- [ ] Service worker, test E2E, security review
 
 ---
 

@@ -57,6 +57,41 @@
       "when": 1770856925777,
       "tag": "0007_gigantic_nehzno",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1770857000000,
+      "tag": "0008_two_shift_periods",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1770886706496,
+      "tag": "0009_black_adam_warlock",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1770887277764,
+      "tag": "0010_mighty_argent",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1770887500000,
+      "tag": "0012_employee_roles_priority",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1770887600000,
+      "tag": "0013_employee_roles_hourly_rate",
+      "breakpoints": true
     }
   ]
 }

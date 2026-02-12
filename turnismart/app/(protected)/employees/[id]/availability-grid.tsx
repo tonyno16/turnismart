@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { updateAvailability } from "@/app/actions/employees";
 
 const DAYS = 7;
-const PERIODS = ["morning", "afternoon", "evening"] as const;
+const PERIODS = ["morning", "evening"] as const;
 const STATUSES = ["available", "unavailable", "preferred"] as const;
 
 type AvailabilityItem = {
@@ -14,7 +14,7 @@ type AvailabilityItem = {
   status: string;
 };
 
-const periodLabels = ["M", "P", "S"];
+const periodLabels = ["M", "S"];
 const dayLabels = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 const statusLabels: Record<string, string> = {
   available: "✓",
@@ -86,7 +86,7 @@ export function EmployeeAvailabilityGrid({
                     key={`${d}-${p}`}
                     className="p-1 text-center text-xs text-zinc-500"
                   >
-                    {p === 1 ? label : ""}
+                    {p === 0 ? label : ""}
                   </th>
                 ))
               )}
@@ -97,9 +97,9 @@ export function EmployeeAvailabilityGrid({
               <td className="p-2 font-medium text-zinc-600 dark:text-zinc-400">
                 Disponibilità
               </td>
-              {Array.from({ length: DAYS * 3 }, (_, i) => {
-                const day = Math.floor(i / 3);
-                const period = PERIODS[i % 3];
+              {Array.from({ length: DAYS * 2 }, (_, i) => {
+                const day = Math.floor(i / 2);
+                const period = PERIODS[i % 2];
                 const key = `${day}_${period}`;
                 const status = values[key] ?? "available";
                 return (

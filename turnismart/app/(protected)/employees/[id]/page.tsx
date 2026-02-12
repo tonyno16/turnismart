@@ -6,6 +6,8 @@ import { getLocations } from "@/lib/locations";
 import { getOnboardingData } from "@/app/actions/onboarding";
 import { EmployeeProfileForm } from "./profile-form";
 import { EmployeeAvailabilityGrid } from "./availability-grid";
+import { EmployeeRolesSection } from "./roles-section";
+import { DeleteEmployeeButton } from "./delete-employee-button";
 
 const TIME_OFF_LABELS: Record<string, string> = {
   vacation: "Ferie",
@@ -42,13 +44,31 @@ export default async function EmployeeDetailPage({
       </div>
 
       <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900/50">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-          {employee.first_name} {employee.last_name}
-        </h1>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+            {employee.first_name} {employee.last_name}
+          </h1>
+          <DeleteEmployeeButton
+            employeeId={employee.id}
+            employeeName={`${employee.first_name} ${employee.last_name}`}
+          />
+        </div>
         <EmployeeProfileForm
           employee={employee}
           roles={roles}
           locations={locationsList}
+        />
+      </div>
+
+      <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900/50">
+        <h2 className="text-lg font-semibold text-zinc-900 dark:text-white">
+          Mansioni
+        </h2>
+        <EmployeeRolesSection
+          employeeId={employee.id}
+          employeeRoles={employee.roles}
+          allRoles={roles}
+          baseHourlyRate={employee.hourly_rate ?? ""}
         />
       </div>
 

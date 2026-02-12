@@ -24,13 +24,13 @@
 Owners migrating from other systems need to import employee lists efficiently. CSV files may have inconsistent data, duplicates, and invalid entries. The import must validate each row, detect duplicates, and provide clear feedback on what was imported, skipped, or failed.
 
 ### Success Criteria
-- [ ] Database table: import_jobs created
-- [ ] Supabase Storage bucket "imports" configured
-- [ ] CSV Import workflow (3 tasks): parse & validate → create records → finalize
-- [ ] Import modal with drop zone, preview, progress bar, results
-- [ ] Column auto-mapping
-- [ ] Duplicate detection (email/phone vs existing)
-- [ ] Error reporting with row number and reason
+- [x] Database table: import_jobs created
+- [x] Supabase Storage bucket "imports" configured
+- [x] CSV Import workflow (3 tasks): parse & validate → create records → finalize
+- [x] Import modal with drop zone, preview, progress bar, results
+- [x] Column auto-mapping
+- [x] Duplicate detection (email/phone vs existing)
+- [x] Error reporting with row number and reason
 
 ---
 
@@ -60,35 +60,41 @@ Owners migrating from other systems need to import employee lists efficiently. C
 ## 9. Frontend Changes
 
 ### Employee List Addition
-- [ ] Add "Import CSV" button to employee list page
-- [ ] `components/employees/csv-import-modal.tsx` - Upload, preview, progress, results
+- [x] Add "Import CSV" button to employee list page
+- [x] `components/employees/csv-import-modal.tsx` - Upload, preview, progress, results
 
 ---
 
 ## 11. Implementation Plan
 
 ### Phase 1: Database & Storage
-- [ ] **Task 1.1:** Create import_jobs schema
-- [ ] **Task 1.2:** Generate + apply migration (with down migration)
-- [ ] **Task 1.3:** Create Supabase Storage bucket "imports" with RLS
+- [x] **Task 1.1:** Create import_jobs schema
+- [x] **Task 1.2:** Generate + apply migration (with down migration)
+- [x] **Task 1.3:** Create Supabase Storage bucket "imports" with RLS
 
 ### Phase 2: CSV Import Workflow
-- [ ] **Task 2.1:** Install papaparse
-- [ ] **Task 2.2:** Implement parse-and-validate-csv task
-- [ ] **Task 2.3:** Implement create-employee-records task
-- [ ] **Task 2.4:** Implement finalize-import task
+- [x] **Task 2.1:** Install papaparse
+- [x] **Task 2.2:** Implement parse-and-validate-csv task
+- [x] **Task 2.3:** Implement create-employee-records task
+- [x] **Task 2.4:** Implement finalize-import task
 
 ### Phase 3: Import UI
-- [ ] **Task 3.1:** Build CSV import modal with drop zone
-- [ ] **Task 3.2:** Add preview with column mapping
-- [ ] **Task 3.3:** Add progress bar during import
-- [ ] **Task 3.4:** Add results display (imported/errors/duplicates)
+- [x] **Task 3.1:** Build CSV import modal with drop zone
+- [x] **Task 3.2:** Add preview with column mapping
+- [x] **Task 3.3:** Add progress bar during import
+- [x] **Task 3.4:** Add results display (imported/errors/duplicates)
 
 ---
 
 ## 12. Task Completion Tracking
 
-_(To be updated during implementation)_
+**Status: ✅ Completato**
+
+- Schema import_jobs + migration
+- trigger/csv-import.ts: csvImportWorkflow + createEmployeeRecords + finalizeImport
+- lib papaparse, auto-mapping colonne (nome/cognome/email/telefono/mansione/contratto/ore)
+- uploadCsvAndCreateImportJob, getImportJobStatus server actions
+- components/employees/csv-import-modal.tsx con drop zone, progress, risultati
 
 ---
 

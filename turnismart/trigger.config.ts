@@ -18,5 +18,5 @@ export default defineConfig({
       randomize: true,
     },
   },
-  dirs: ["npx trigger.dev@latest dev"],
+  dirs: ["trigger"],
 });

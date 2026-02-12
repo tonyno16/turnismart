@@ -89,6 +89,7 @@ export async function collectSchedulingConstraints(
     .select({
       employee_id: employeeRoles.employee_id,
       role_id: roles.id,
+      priority: employeeRoles.priority,
     })
     .from(employeeRoles)
     .innerJoin(roles, eq(employeeRoles.role_id, roles.id))
@@ -116,7 +117,9 @@ export async function collectSchedulingConstraints(
   }));
 
   const empData = emps.map((e) => {
-    const ers = empRolesRows.filter((er) => er.employee_id === e.id);
+    const ers = empRolesRows
+      .filter((er) => er.employee_id === e.id)
+      .sort((a, b) => a.priority - b.priority);
     const av = avail.filter((a) => a.employee_id === e.id);
     const incPairs = inc.filter(
       (i) => i.employee_a_id === e.id || i.employee_b_id === e.id
@@ -197,7 +200,7 @@ REGOLE:
 5. Riposo 11h tra turni consecutivi
 6. Un dipendente deve avere il ruolo richiesto (roleIds contiene roleId del turno)
 
-Rispondi SOLO con un array JSON di oggetti: [{"employeeId":"uuid","locationId":"uuid","roleId":"uuid","dayOfWeek":0-6,"period":"morning|afternoon|evening"}]
+Rispondi SOLO con un array JSON di oggetti: [{"employeeId":"uuid","locationId":"uuid","roleId":"uuid","dayOfWeek":0-6,"period":"morning|evening"}]
 Nessun altro testo.`;
 
   const response = await openai.chat.completions.create({

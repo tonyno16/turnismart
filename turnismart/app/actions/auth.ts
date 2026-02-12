@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { db } from "@/lib/db";
-import { users, invitations } from "@/drizzle/schema";
+import { users, invitations, accountantClients, employees } from "@/drizzle/schema";
 import { createOrganization } from "@/lib/organizations";
 
 const TRIAL_DAYS = 30;
@@ -49,6 +49,9 @@ export async function signUp(
   if (signUpError) {
     if (signUpError.message.includes("already registered")) {
       return { error: "Questa email è già registrata. Prova ad accedere." };
+    }
+    if (signUpError.message.toLowerCase().includes("rate limit") || signUpError.message.toLowerCase().includes("rate_limit")) {
+      return { error: "Troppi tentativi di registrazione. Attendi circa 1 ora e riprova, oppure prova ad accedere se hai già un account." };
     }
     return { error: signUpError.message };
   }
@@ -105,17 +108,29 @@ export async function login(_prev: { error?: string }, formData: FormData) {
 
 export async function signInWithGoogle(redirectTo = "/dashboard") {
   const supabase = await createClient();
-  await supabase.auth.signInWithOAuth({
+  const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
       redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+      queryParams: { access_type: "offline", prompt: "consent" },
     },
   });
+  if (error) throw new Error(error.message);
+  if (data?.url) redirect(data.url);
+  throw new Error("OAuth URL non ricevuta");
 }
 
 export async function signInWithGoogleForm(formData: FormData) {
   const redirectTo = (formData.get("redirectTo") as string) || "/dashboard";
-  await signInWithGoogle(redirectTo);
+  try {
+    await signInWithGoogle(redirectTo);
+  } catch (e: unknown) {
+    if (e && typeof e === "object" && "digest" in e && String((e as { digest?: string }).digest)?.startsWith("NEXT_REDIRECT")) {
+      throw e;
+    }
+    const msg = e instanceof Error ? e.message : "Errore login Google";
+    redirect(`/auth/login?error=${encodeURIComponent(msg)}&redirectTo=${encodeURIComponent(redirectTo)}`);
+  }
 }
 
 export async function forgotPassword(
@@ -184,13 +199,39 @@ export async function acceptInvite(
         (u) => u.email === invitation.email
       );
       if (existingUser) {
-        await db.insert(users).values({
-          id: existingUser.id,
-          email: invitation.email,
-          full_name: fullName || null,
-          organization_id: invitation.organization_id,
-          role: invitation.role as "manager" | "employee" | "accountant",
-        });
+        const [existingDbUser] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.id, existingUser.id))
+          .limit(1);
+        if (!existingDbUser) {
+          await db.insert(users).values({
+            id: existingUser.id,
+            email: invitation.email,
+            full_name: fullName || null,
+            organization_id: invitation.organization_id,
+            role: invitation.role as "manager" | "employee" | "accountant",
+          });
+        }
+        if (invitation.role === "accountant") {
+          await db.insert(accountantClients).values({
+            accountant_user_id: existingUser.id,
+            organization_id: invitation.organization_id,
+            status: "active",
+            accepted_at: new Date(),
+          });
+        }
+        if (invitation.role === "employee") {
+          await db
+            .update(employees)
+            .set({ user_id: existingUser.id, updated_at: new Date() })
+            .where(
+              and(
+                eq(employees.organization_id, invitation.organization_id),
+                eq(employees.email, invitation.email)
+              )
+            );
+        }
         await db
           .update(invitations)
           .set({
@@ -213,6 +254,27 @@ export async function acceptInvite(
     organization_id: invitation.organization_id,
     role: invitation.role as "manager" | "employee" | "accountant",
   });
+
+  if (invitation.role === "accountant") {
+    await db.insert(accountantClients).values({
+      accountant_user_id: authUser.id,
+      organization_id: invitation.organization_id,
+      status: "active",
+      accepted_at: new Date(),
+    });
+  }
+
+  if (invitation.role === "employee") {
+    await db
+      .update(employees)
+      .set({ user_id: authUser.id, updated_at: new Date() })
+      .where(
+        and(
+          eq(employees.organization_id, invitation.organization_id),
+          eq(employees.email, invitation.email)
+        )
+      );
+  }
 
   await db
     .update(invitations)

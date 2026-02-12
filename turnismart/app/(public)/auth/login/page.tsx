@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { login, signInWithGoogleForm } from "@/app/actions/auth";
-import { AuthForm } from "../auth-form";
+import { signInWithGoogleForm } from "@/app/actions/auth";
 
 export const metadata = {
   title: "Accedi",
@@ -35,20 +34,49 @@ export default async function LoginPage({
         )}
       </div>
 
-      <AuthForm
-        action={login}
-        submitLabel="Accedi"
-        fields={[
-          { name: "email", type: "email", label: "Email", required: true },
-          {
-            name: "password",
-            type: "password",
-            label: "Password",
-            required: true,
-          },
-        ]}
-        hiddenFields={params.redirectTo ? [{ name: "redirectTo", value: params.redirectTo }] : undefined}
-      />
+      <form action="/api/auth/login" method="POST" className="space-y-4">
+        {params.redirectTo && (
+          <input type="hidden" name="redirectTo" value={params.redirectTo} />
+        )}
+        <div>
+          <label
+            htmlFor="email"
+            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Email *
+          </label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 placeholder-zinc-500 focus:border-[hsl(var(--primary))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))] dark:border-zinc-600 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-400"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="password"
+            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Password *
+          </label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            required
+            autoComplete="current-password"
+            className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-zinc-900 placeholder-zinc-500 focus:border-[hsl(var(--primary))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))] dark:border-zinc-600 dark:bg-zinc-800 dark:text-white dark:placeholder-zinc-400"
+          />
+        </div>
+        <button
+          type="submit"
+          className="w-full rounded-lg bg-[hsl(var(--primary))] px-4 py-3 text-sm font-semibold text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))] focus:ring-offset-2 dark:focus:ring-offset-zinc-900"
+        >
+          Accedi
+        </button>
+      </form>
 
       <div className="relative">
         <div className="absolute inset-0 flex items-center">
