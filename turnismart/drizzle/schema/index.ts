@@ -1,0 +1,213 @@
+import { relations } from "drizzle-orm";
+import { accountantClients } from "./accountant-clients";
+import { employeeAvailability } from "./employee-availability";
+import { employeeIncompatibilities } from "./employee-incompatibilities";
+import { employeeRoles } from "./employee-roles";
+import { employeeTimeOff } from "./employee-time-off";
+import { employees } from "./employees";
+import { invitations } from "./invitations";
+import { locations } from "./locations";
+import { organizationSettings } from "./organization-settings";
+import { organizations } from "./organizations";
+import { roles } from "./roles";
+import { scheduleGenerationJobs } from "./schedule-generation-jobs";
+import { notificationJobs } from "./notification-jobs";
+import { notifications } from "./notifications";
+import { reports } from "./reports";
+import { reportGenerationJobs } from "./report-generation-jobs";
+import { italianHolidays } from "./italian-holidays";
+import { schedules } from "./schedules";
+import { shifts } from "./shifts";
+import { shiftRequests } from "./shift-requests";
+import { staffingRequirements } from "./staffing-requirements";
+import { users } from "./users";
+
+export { organizations } from "./organizations";
+export { users, userRoles, type UserRole } from "./users";
+export { invitations, invitationStatuses, type InvitationStatus } from "./invitations";
+export {
+  accountantClients,
+  accountantClientStatuses,
+  type AccountantClientStatus,
+} from "./accountant-clients";
+export { locations } from "./locations";
+export { roles } from "./roles";
+export {
+  staffingRequirements,
+  shiftPeriods,
+  type ShiftPeriod,
+} from "./staffing-requirements";
+export { organizationSettings } from "./organization-settings";
+export { employees, contractTypes, type ContractType } from "./employees";
+export { employeeRoles } from "./employee-roles";
+export {
+  employeeAvailability,
+  availabilityStatuses,
+  type AvailabilityStatus,
+} from "./employee-availability";
+export { employeeIncompatibilities } from "./employee-incompatibilities";
+export {
+  employeeTimeOff,
+  timeOffTypes,
+  timeOffStatuses,
+  type TimeOffType,
+  type TimeOffStatus,
+} from "./employee-time-off";
+export {
+  scheduleGenerationJobs,
+  jobStatuses,
+  type JobStatus,
+} from "./schedule-generation-jobs";
+export {
+  notificationJobs,
+  notificationJobStatuses,
+  type NotificationJobStatus,
+} from "./notification-jobs";
+export {
+  notifications,
+  notificationChannels,
+  notificationDeliveryStatuses,
+  notificationEventTypes,
+  type NotificationChannel,
+  type NotificationDeliveryStatus,
+  type NotificationEventType,
+} from "./notifications";
+export {
+  reports,
+  reportStatuses,
+  type ReportStatus,
+} from "./reports";
+export {
+  reportGenerationJobs,
+  reportJobStatuses,
+  type ReportJobStatus,
+} from "./report-generation-jobs";
+export { italianHolidays } from "./italian-holidays";
+export {
+  schedules,
+  scheduleStatuses,
+  type ScheduleStatus,
+} from "./schedules";
+export { shifts, shiftStatuses, type ShiftStatus } from "./shifts";
+export {
+  shiftRequests,
+  shiftRequestTypes,
+  shiftRequestStatuses,
+  type ShiftRequestType,
+  type ShiftRequestStatus,
+} from "./shift-requests";
+
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  users: many(users),
+  invitations: many(invitations),
+  accountantClients: many(accountantClients),
+  locations: many(locations),
+  roles: many(roles),
+  organizationSettings: many(organizationSettings),
+  employees: many(employees),
+  employeeIncompatibilities: many(employeeIncompatibilities),
+}));
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  organization: one(organizations),
+  invitationsSent: many(invitations),
+  accountantClients: many(accountantClients),
+  employees: many(employees),
+}));
+
+export const invitationsRelations = relations(invitations, ({ one }) => ({
+  organization: one(organizations),
+  invitedByUser: one(users),
+}));
+
+export const accountantClientsRelations = relations(
+  accountantClients,
+  ({ one }) => ({
+    accountantUser: one(users),
+    organization: one(organizations),
+  })
+);
+
+export const locationsRelations = relations(locations, ({ one, many }) => ({
+  organization: one(organizations),
+  staffingRequirements: many(staffingRequirements),
+  employees: many(employees),
+}));
+
+export const rolesRelations = relations(roles, ({ one, many }) => ({
+  organization: one(organizations),
+  staffingRequirements: many(staffingRequirements),
+  employeeRoles: many(employeeRoles),
+}));
+
+export const staffingRequirementsRelations = relations(
+  staffingRequirements,
+  ({ one }) => ({
+    location: one(locations),
+    role: one(roles),
+  })
+);
+
+export const organizationSettingsRelations = relations(
+  organizationSettings,
+  ({ one }) => ({
+    organization: one(organizations),
+  })
+);
+
+export const employeesRelations = relations(employees, ({ one, many }) => ({
+  organization: one(organizations),
+  user: one(users),
+  preferredLocation: one(locations),
+  employeeRoles: many(employeeRoles),
+  availability: many(employeeAvailability),
+  timeOff: many(employeeTimeOff),
+}));
+
+export const employeeRolesRelations = relations(employeeRoles, ({ one }) => ({
+  employee: one(employees),
+  role: one(roles),
+}));
+
+export const employeeAvailabilityRelations = relations(
+  employeeAvailability,
+  ({ one }) => ({
+    employee: one(employees),
+  })
+);
+
+export const employeeTimeOffRelations = relations(employeeTimeOff, ({ one }) => ({
+  employee: one(employees),
+  approvedByUser: one(users),
+}));
+
+export const employeeIncompatibilitiesRelations = relations(
+  employeeIncompatibilities,
+  ({ one }) => ({
+    organization: one(organizations),
+    employeeA: one(employees),
+    employeeB: one(employees),
+  })
+);
+
+export const schedulesRelations = relations(schedules, ({ one, many }) => ({
+  organization: one(organizations),
+  publishedByUser: one(users),
+  shifts: many(shifts),
+}));
+
+export const shiftsRelations = relations(shifts, ({ one }) => ({
+  schedule: one(schedules),
+  organization: one(organizations),
+  location: one(locations),
+  employee: one(employees),
+  role: one(roles),
+}));
+
+export const shiftRequestsRelations = relations(shiftRequests, ({ one }) => ({
+  organization: one(organizations),
+  employee: one(employees),
+  shift: one(shifts),
+  swapWithEmployee: one(employees),
+  reviewedByUser: one(users),
+}));
