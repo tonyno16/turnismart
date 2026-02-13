@@ -28,6 +28,7 @@ vi.mock("@/drizzle/schema", () => ({
   shifts: { employee_id: "employee_id", date: "date", status: "status", schedule_id: "schedule_id", start_time: "start_time", end_time: "end_time", location_id: "location_id", role_id: "role_id" },
   employees: { id: "id", max_weekly_hours: "max_weekly_hours" },
   employeeAvailability: { employee_id: "employee_id", day_of_week: "day_of_week", shift_period: "shift_period" },
+  employeeAvailabilityExceptions: { employee_id: "employee_id", day_of_week: "day_of_week", start_date: "start_date", end_date: "end_date" },
   employeeIncompatibilities: { employee_a_id: "employee_a_id", employee_b_id: "employee_b_id" },
   employeeTimeOff: { employee_id: "employee_id", status: "status", start_date: "start_date", end_date: "end_date" },
 }));
@@ -210,10 +211,11 @@ describe("checkIncompatibility", () => {
 
 describe("validateShiftAssignment", () => {
   it("returns null when all checks pass", async () => {
-    // Batch 1: checkOverlap, checkAvailability, checkTimeOff (parallel)
+    // Batch 1: checkOverlap, checkAvailability, checkTimeOff, checkAvailabilityException (parallel)
     mockDb.select.mockReturnValueOnce(chainableMock([])); // overlap: no shifts
     mockDb.select.mockReturnValueOnce(chainableMock([])); // availability: no record
     mockDb.select.mockReturnValueOnce(chainableMock([])); // timeOff: no records
+    mockDb.select.mockReturnValueOnce(chainableMock([])); // availabilityException: no records
     // Batch 2: checkMaxWeeklyHours, checkMinRestPeriod, checkIncompatibility (parallel)
     mockDb.select.mockReturnValueOnce(chainableMock([{ max_weekly_hours: 40 }])); // max hours: employee
     mockGetEmployeeWeekShifts.mockResolvedValueOnce([]);
@@ -235,7 +237,7 @@ describe("validateShiftAssignment", () => {
   });
 
   it("short-circuits on first batch failure", async () => {
-    // Batch 1 runs in parallel: overlap (conflict), availability (pass), timeOff (pass)
+    // Batch 1 runs in parallel: overlap (conflict), availability (pass), timeOff (pass), exception (pass)
     mockDb.select.mockReturnValueOnce(
       chainableMock([
         { id: "s1", start_time: "08:00", end_time: "14:00", status: "active" },
@@ -243,6 +245,7 @@ describe("validateShiftAssignment", () => {
     );
     mockDb.select.mockReturnValueOnce(chainableMock([]));
     mockDb.select.mockReturnValueOnce(chainableMock([]));
+    mockDb.select.mockReturnValueOnce(chainableMock([])); // exception: no records
 
     const result = await validateShiftAssignment({
       employeeId: "emp1",
@@ -257,7 +260,7 @@ describe("validateShiftAssignment", () => {
     });
     expect(result).not.toBeNull();
     expect(result!.type).toBe("overlap");
-    // Only batch 1 (3 calls) should have been made
-    expect(mockDb.select).toHaveBeenCalledTimes(3);
+    // Only batch 1 (4 calls) should have been made
+    expect(mockDb.select).toHaveBeenCalledTimes(4);
   });
 });

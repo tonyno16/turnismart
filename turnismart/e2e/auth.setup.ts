@@ -15,9 +15,11 @@ setup("authenticate", async ({ page }) => {
   await page.getByLabel(/password/i).first().fill(password);
   await page.getByRole("button", { name: /accedi|login|sign in/i }).click();
 
-  // Wait for redirect to dashboard after login (form POSTs to /api/auth/login → 303)
-  await expect(page).toHaveURL(/\/dashboard/);
-  await expect(page.getByText("Dashboard")).toBeVisible();
+  // Wait for redirect after login: dashboard (se onboarding completato) o onboarding
+  await expect(page).toHaveURL(/\/(dashboard|onboarding)/);
+  await expect(
+    page.getByText(/Dashboard|Configura la tua attività/i)
+  ).toBeVisible();
 
   // Save auth state
   await page.context().storageState({ path: authFile });
