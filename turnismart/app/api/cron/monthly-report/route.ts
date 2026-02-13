@@ -16,11 +16,7 @@ const CRON_SECRET = process.env.CRON_SECRET;
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
-  if (!CRON_SECRET) {
-    if (process.env.NODE_ENV === "production") {
-      return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
-    }
-  } else if (authHeader !== `Bearer ${CRON_SECRET}`) {
+  if (!CRON_SECRET || authHeader !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -32,7 +28,7 @@ export async function GET(request: NextRequest) {
     .from(organizations)
     .where(eq(organizations.onboarding_completed, true));
 
-  const results: { orgId: string; ok: boolean; error?: string }[] = [];
+  const results: { orgId: string; ok: boolean; error?: string; formatErrors?: string[] }[] = [];
 
   for (const org of orgs) {
     try {
@@ -46,6 +42,7 @@ export async function GET(request: NextRequest) {
       let pdfUrl: string | null = null;
       let csvUrl: string | null = null;
       let excelUrl: string | null = null;
+      const formatErrors: string[] = [];
 
       try {
         pdfUrl = await uploadReportToStorage(
@@ -54,7 +51,9 @@ export async function GET(request: NextRequest) {
           "pdf",
           await generateReportPdf(aggregate)
         );
-      } catch {}
+      } catch (e) {
+        formatErrors.push(`pdf: ${e instanceof Error ? e.message : "unknown"}`);
+      }
       try {
         csvUrl = await uploadReportToStorage(
           org.id,
@@ -62,7 +61,9 @@ export async function GET(request: NextRequest) {
           "csv",
           await generateReportCsv(aggregate)
         );
-      } catch {}
+      } catch (e) {
+        formatErrors.push(`csv: ${e instanceof Error ? e.message : "unknown"}`);
+      }
       try {
         excelUrl = await uploadReportToStorage(
           org.id,
@@ -70,7 +71,9 @@ export async function GET(request: NextRequest) {
           "xlsx",
           await generateReportExcel(aggregate)
         );
-      } catch {}
+      } catch (e) {
+        formatErrors.push(`xlsx: ${e instanceof Error ? e.message : "unknown"}`);
+      }
 
       await db
         .insert(reports)
@@ -98,7 +101,11 @@ export async function GET(request: NextRequest) {
           },
         });
 
-      results.push({ orgId: org.id, ok: true });
+      results.push({
+        orgId: org.id,
+        ok: true,
+        formatErrors: formatErrors.length > 0 ? formatErrors : undefined,
+      });
     } catch (e) {
       results.push({
         orgId: org.id,

@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { sanitizeRedirectPath } from "@/lib/url";
 
 const publicPaths = ["/", "/privacy", "/terms", "/refund", "/auth"];
 const authPaths = ["/auth/login", "/auth/sign-up", "/auth/forgot-password", "/auth/verify-email"];
@@ -62,7 +63,7 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isAuthPath(pathname) && !pathname.startsWith("/auth/invite/")) {
-    const redirectTo = request.nextUrl.searchParams.get("redirectTo") || "/dashboard";
+    const redirectTo = sanitizeRedirectPath(request.nextUrl.searchParams.get("redirectTo"));
     return NextResponse.redirect(new URL(redirectTo, request.url));
   }
 

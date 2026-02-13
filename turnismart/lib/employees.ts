@@ -82,45 +82,47 @@ export async function getEmployeeDetail(employeeId: string) {
     .limit(1);
   if (!emp) return null;
 
-  const empRoles = await db
-    .select({
-      id: employeeRoles.id,
-      role_id: roles.id,
-      role_name: roles.name,
-      priority: employeeRoles.priority,
-      hourly_rate: employeeRoles.hourly_rate,
-    })
-    .from(employeeRoles)
-    .innerJoin(roles, eq(employeeRoles.role_id, roles.id))
-    .where(eq(employeeRoles.employee_id, employeeId))
-    .orderBy(employeeRoles.priority);
+  // Parallelize independent queries to reduce round-trips (was 7 sequential, now 2 batches)
+  const [empRolesUnsorted, availability, availabilityExceptions, timeOff, incompatibilitiesRows] =
+    await Promise.all([
+      db
+        .select({
+          id: employeeRoles.id,
+          role_id: roles.id,
+          role_name: roles.name,
+          priority: employeeRoles.priority,
+          hourly_rate: employeeRoles.hourly_rate,
+        })
+        .from(employeeRoles)
+        .innerJoin(roles, eq(employeeRoles.role_id, roles.id))
+        .where(eq(employeeRoles.employee_id, employeeId))
+        .orderBy(employeeRoles.priority),
+      db
+        .select()
+        .from(employeeAvailability)
+        .where(eq(employeeAvailability.employee_id, employeeId)),
+      db
+        .select()
+        .from(employeeAvailabilityExceptions)
+        .where(eq(employeeAvailabilityExceptions.employee_id, employeeId))
+        .orderBy(employeeAvailabilityExceptions.start_date),
+      db
+        .select()
+        .from(employeeTimeOff)
+        .where(eq(employeeTimeOff.employee_id, employeeId))
+        .orderBy(employeeTimeOff.start_date),
+      db
+        .select()
+        .from(employeeIncompatibilities)
+        .where(
+          or(
+            eq(employeeIncompatibilities.employee_a_id, employeeId),
+            eq(employeeIncompatibilities.employee_b_id, employeeId)
+          )
+        ),
+    ]);
 
-  const availability = await db
-    .select()
-    .from(employeeAvailability)
-    .where(eq(employeeAvailability.employee_id, employeeId));
-
-  const availabilityExceptions = await db
-    .select()
-    .from(employeeAvailabilityExceptions)
-    .where(eq(employeeAvailabilityExceptions.employee_id, employeeId))
-    .orderBy(employeeAvailabilityExceptions.start_date);
-
-  const timeOff = await db
-    .select()
-    .from(employeeTimeOff)
-    .where(eq(employeeTimeOff.employee_id, employeeId))
-    .orderBy(employeeTimeOff.start_date);
-
-  const incompatibilitiesRows = await db
-    .select()
-    .from(employeeIncompatibilities)
-    .where(
-      or(
-        eq(employeeIncompatibilities.employee_a_id, employeeId),
-        eq(employeeIncompatibilities.employee_b_id, employeeId)
-      )
-    );
+  const empRoles = empRolesUnsorted;
 
   const otherIds = incompatibilitiesRows.map((r) =>
     r.employee_a_id === employeeId ? r.employee_b_id : r.employee_a_id

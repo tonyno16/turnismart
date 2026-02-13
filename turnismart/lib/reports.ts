@@ -14,11 +14,7 @@ import {
   employeeRoles,
 } from "@/drizzle/schema";
 import { createServiceClient } from "./supabase/service";
-
-function parseTimeMinutes(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-}
+import { parseTimeMinutes } from "./time-utils";
 
 function hoursBetween(start: string, end: string, breakMins = 0): number {
   const s = parseTimeMinutes(start);

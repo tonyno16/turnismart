@@ -5,6 +5,20 @@ import { useRouter } from "next/navigation";
 import { uploadCsvAndCreateImportJob, getImportJobStatus } from "@/app/actions/csv-import";
 import { Upload, X } from "lucide-react";
 
+type ImportResultSummary = {
+  imported?: number;
+  skipped?: number;
+  errors?: Array<{ row: number; reason: string }>;
+};
+
+type ImportJobStatus = {
+  status: string;
+  progress: number;
+  totalRows: number;
+  result?: ImportResultSummary;
+  error?: string;
+};
+
 export function CsvImportModal({
   open,
   onClose,
@@ -16,13 +30,7 @@ export function CsvImportModal({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [status, setStatus] = useState<{
-    status: string;
-    progress: number;
-    totalRows: number;
-    result?: { imported?: number; skipped?: number; errors?: Array<{ row: number; reason: string }> };
-    error?: string;
-  } | null>(null);
+  const [status, setStatus] = useState<ImportJobStatus | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -41,7 +49,7 @@ export function CsvImportModal({
         status: s.status,
         progress: s.progress_percentage ?? 0,
         totalRows: s.total_rows ?? 0,
-        result: s.result_summary as any,
+        result: s.result_summary as ImportResultSummary | undefined,
         error: s.error_message ?? undefined,
       });
       if (s.status === "completed" || s.status === "failed") {

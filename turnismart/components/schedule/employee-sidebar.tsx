@@ -2,6 +2,7 @@
 
 import { memo, useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
+import { parseTimeMinutes } from "@/lib/time-utils";
 
 type Employee = { id: string; first_name: string; last_name: string; weekly_hours: number };
 type Role = { id: string; name: string };
@@ -12,11 +13,6 @@ type Shift = {
   date: string;
   status?: string;
 };
-
-function parseTimeMinutes(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-}
 
 type EquityBadge = "ok" | "low" | "high" | null;
 
@@ -136,6 +132,20 @@ export const EmployeeSidebar = memo(function EmployeeSidebar({
     return map;
   }, [shifts]);
 
+  const empRoleNames = useMemo(() => {
+    if (!roles || !employeeRoleIds) return new Map<string, string>();
+    const roleMap = new Map(roles.map((r) => [r.id, r.name]));
+    const result = new Map<string, string>();
+    for (const emp of employees) {
+      const names = (employeeRoleIds[emp.id] ?? [])
+        .map((rid) => roleMap.get(rid))
+        .filter(Boolean)
+        .join(", ");
+      result.set(emp.id, names);
+    }
+    return result;
+  }, [employees, roles, employeeRoleIds]);
+
   const { empShiftCounts, equityByEmp } = useMemo(() => {
     const counts = new Map<string, number>();
     for (const s of shifts) {
@@ -174,26 +184,17 @@ export const EmployeeSidebar = memo(function EmployeeSidebar({
         {employees.length === 0 ? (
           <p className="text-xs text-zinc-500">Nessun risultato per i filtri selezionati</p>
         ) : (
-          employees.map((emp) => {
-            const roleNames =
-              roles && employeeRoleIds
-                ? (employeeRoleIds[emp.id] ?? [])
-                    .map((rid) => roles.find((r) => r.id === rid)?.name)
-                    .filter(Boolean)
-                    .join(", ") || ""
-                : "";
-            return (
+          employees.map((emp) => (
               <EmployeeCard
                 key={emp.id}
                 employee={emp}
-                roleNames={roleNames}
+                roleNames={empRoleNames.get(emp.id) ?? ""}
                 weekMinutes={empMinutes.get(emp.id) ?? 0}
                 weeklyHours={emp.weekly_hours}
                 shiftCount={empShiftCounts.get(emp.id) ?? 0}
                 equityBadge={equityByEmp.get(emp.id) ?? null}
               />
-            );
-          })
+            ))
         )}
       </div>
     </div>

@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { getEmployeeWeekShiftsWithDetails, getWeekStart } from "@/lib/schedules";
 import { format, parseISO, addDays, subWeeks, addWeeks } from "date-fns";
 import { it } from "date-fns/locale";
+import { parseTimeMinutes } from "@/lib/time-utils";
 import { MyScheduleClient } from "./my-schedule-client";
 
 const DAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
@@ -33,13 +34,9 @@ export default async function MySchedulePage({
     { locale: it }
   )}`;
 
-  const parseTime = (t: string) => {
-    const [h, m] = t.split(":").map(Number);
-    return (h ?? 0) * 60 + (m ?? 0);
-  };
   let totalMinutes = 0;
   for (const s of shifts) {
-    totalMinutes += parseTime(s.end_time) - parseTime(s.start_time);
+    totalMinutes += parseTimeMinutes(s.end_time) - parseTimeMinutes(s.start_time);
   }
   const totalHours = Math.round((totalMinutes / 60) * 10) / 10;
 

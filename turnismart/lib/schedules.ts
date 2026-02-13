@@ -1,6 +1,7 @@
 import { eq, and, gte, lte } from "drizzle-orm";
 import { format, addDays, startOfWeek, parseISO, getISODay } from "date-fns";
 import { db } from "@/lib/db";
+import { parseTimeMinutes } from "@/lib/time-utils";
 import {
   schedules,
   shifts,
@@ -220,6 +221,34 @@ export async function getLocationRoleShiftTimesOverrides(
   }
 
   return map;
+}
+
+/** Resolve period times from pre-loaded maps (in-memory cascade).
+ * Lookup: (loc+role+day) > (loc+role) > (role+day) > (role) > orgDefaults. */
+export function resolvePeriodTimesFromMaps(
+  roleOverrides: Map<string, { start: string; end: string }>,
+  locationOverrides: Map<string, { start: string; end: string }>,
+  orgDefaults: Record<string, { start: string; end: string }>,
+  roleId: string,
+  period: string,
+  locationId?: string,
+  dayOfWeek?: number
+): { start: string; end: string } {
+  if (locationId && dayOfWeek != null) {
+    const locDay = locationOverrides.get(`${locationId}:${roleId}:${period}:${dayOfWeek}`);
+    if (locDay) return locDay;
+  }
+  if (locationId) {
+    const locAll = locationOverrides.get(`${locationId}:${roleId}:${period}`);
+    if (locAll) return locAll;
+  }
+  if (dayOfWeek != null) {
+    const roleDay = roleOverrides.get(`${roleId}:${period}:${dayOfWeek}`);
+    if (roleDay) return roleDay;
+  }
+  const roleAll = roleOverrides.get(`${roleId}:${period}`);
+  if (roleAll) return roleAll;
+  return orgDefaults[period] ?? orgDefaults.morning;
 }
 
 /** Get week start (Monday) for a date string YYYY-MM-DD */
@@ -479,14 +508,10 @@ export async function getWeekStats(
       and(eq(shifts.schedule_id, sched.id), eq(shifts.status, "active"))
   );
 
-  const parseTime = (t: string) => {
-    const [h, m] = t.split(":").map(Number);
-    return h * 60 + m;
-  };
   let totalMinutes = 0;
   const empIds = new Set<string>();
   for (const s of shiftList) {
-    totalMinutes += parseTime(s.end_time) - parseTime(s.start_time);
+    totalMinutes += parseTimeMinutes(s.end_time) - parseTimeMinutes(s.start_time);
     empIds.add(s.employee_id);
   }
 

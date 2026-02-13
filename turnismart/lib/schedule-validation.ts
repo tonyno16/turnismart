@@ -11,6 +11,7 @@ import {
 } from "@/drizzle/schema";
 import type { AvailabilityShiftPeriod } from "@/drizzle/schema/employee-availability";
 import { getEmployeeWeekShifts } from "./schedules";
+import { parseTimeMinutes } from "./time-utils";
 
 export type ValidationConflict = {
   type:
@@ -22,11 +23,6 @@ export type ValidationConflict = {
     | "time_off";
   message: string;
 };
-
-function parseTimeMinutes(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-}
 
 /** Check if proposed shift overlaps with existing shifts for same employee */
 export async function checkOverlap(
