@@ -1,0 +1,4 @@
+# AI/Cursor internal docs - keep local only
+/ai_docs/
+/.claude/
+turnismart/.claude/
