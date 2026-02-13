@@ -59,7 +59,7 @@ export function SickLeavePopup({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="mx-4 max-w-lg rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-900">
         <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
           Trova sostituto

@@ -92,7 +92,7 @@ export default async function DashboardPage() {
           Lun {format(parseISO(weekStart), "d MMM", { locale: it })} – Dom{" "}
           {format(addDays(parseISO(weekStart), 6), "d MMM yyyy", { locale: it })}
         </p>
-        <div className="mt-4 overflow-x-auto">
+        <div className="mt-4 overflow-x-auto [-webkit-overflow-scrolling:touch]">
           {locationIds.length === 0 ? (
             <p className="py-8 text-center text-zinc-500">
               Nessuna sede. Aggiungi una sede e il fabbisogno per vedere la

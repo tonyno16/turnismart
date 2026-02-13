@@ -18,8 +18,8 @@
 | 1 | ✅ | Landing, privacy, terms, refund |
 | 2 | ✅ | Auth Supabase, middleware, invite flow |
 | 3 | ✅ | Onboarding 5 step, sector roles |
-| 4 | ✅ | Locations + Employees CRUD. Manca: copyStaffingFrom* |
-| 5 | ✅ | Scheduler DnD, vista per locale, conflict popup, employee sidebar |
+| 4 | ✅ | Locations + Employees CRUD. Copy fabbisogno, replica settimana (016) |
+| 5 | ✅ | Scheduler DnD, vista sede/dipendente/ruolo (017), conflict popup, employee sidebar, filtri |
 | 6 | ✅ | Dashboard con KPI e azioni rapide |
 | 7 | ✅ | AI scheduling (lib/ai-schedule sync), sick-leave sostituti, API /ai/suggest |
 | 8 | ✅ | Notifiche (lib/notifications sync), Twilio, Resend, webhooks |
@@ -183,7 +183,7 @@
 - [x] `app/actions/locations.ts` - createLocation, updateLocation, deleteLocation, updateStaffingRequirements
 - [x] `app/actions/employees.ts` - createEmployee, updateEmployee, approveTimeOff, rejectTimeOff
 - [x] `lib/employees.ts`, `lib/locations.ts`
-- [ ] Manca: copyStaffingFromShift, copyStaffingFromLocation (nice-to-have)
+- [x] copyStaffingFromLocation, copyStaffingFromShift, replica settimana (016)
 
 ---
 
@@ -588,14 +588,14 @@
 
 - [ ] Review ALL prep documents for any unaddressed requirements
 - [x] PWA manifest.json per mobile (service worker opzionale)
-- [ ] Responsive polish: test all pages on mobile/tablet/desktop breakpoints
+- [x] Responsive polish: toolbar wrap, dropdown Azioni, sidebar collassabile, touch scroll (023)
 - [x] Error boundaries (ErrorBoundary nel layout protetto)
 - [x] Loading states e skeletons (protected, dashboard, schedule)
 - [x] Empty states (sedi, dipendenti, programmazione)
 - [x] Toast notifications (sonner) per azioni principali (create/edit/delete, approve/reject, extend trial)
 - [x] SEO: meta tags, Open Graph per landing page
 - [ ] Performance: lazy loading per scheduler grande, virtualizzazione griglia se >20 dipendenti
-- [ ] Test end-to-end: flusso completo signup → onboarding → primo orario → pubblica → report
+- [x] Test end-to-end: onboarding → primo orario → pubblica (024, `npm run e2e:onboarding`)
 - [ ] Security review: RLS policies, input sanitization, rate limiting
 - [ ] Verify all 24 database tables created and populated with correct indexes
 - [ ] Verify all 6 Trigger.dev workflows functional with proper error handling
@@ -605,10 +605,13 @@
 
 ### Cosa manca (priorità)
 
-1. **Test E2E** – Flusso signup → onboarding → orario → pubblica → report
+1. ~~**Test E2E**~~ – Fatto (024)
 2. **Security review** – RLS, input validation, rate limiting
 3. **Verifica integrazioni** – Stripe, Trigger.dev CSV, notifiche
-4. **Nice-to-have** – copyStaffingFrom*, Vista Per Dipendente/Ruolo scheduler, virtualizzazione griglia >20 dip.
+4. **Virtualizzazione griglia** – Scheduler >20 dipendenti (opzionale)
+5. **Documentation** – README setup, checklist deploy
+
+*Completati: copyStaffingFrom* (016), Vista Per Dipendente/Ruolo (017), responsive (023), E2E onboarding (024).*
 
 ---
 

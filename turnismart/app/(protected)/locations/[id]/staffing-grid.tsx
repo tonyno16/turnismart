@@ -84,7 +84,7 @@ export function LocationStaffingGrid({
       <p className="mb-2 text-xs text-zinc-500">
         Fabbisogno ricorrente settimanale. Ogni giorno ha due turni: Mattina (08–14) e Sera (14–23).
       </p>
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
         <table className="w-full min-w-[500px] text-sm">
           <thead>
             <tr className="border-b border-zinc-200 dark:border-zinc-700">

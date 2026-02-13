@@ -5,13 +5,16 @@ import { format, addDays, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { FileText, Copy } from "lucide-react";
 
-type Shift = {
+/** Subset di shift usato da ShiftCard; compatibile con il tipo Shift dello scheduler */
+type ShiftForCard = {
   id: string;
   employee_name: string;
   date: string;
   start_time: string;
   end_time: string;
   notes?: string | null;
+  location_name: string;
+  role_name: string;
 };
 
 export function ShiftCard({
@@ -22,10 +25,10 @@ export function ShiftCard({
   onUpdateNotes,
   onDuplicate,
 }: {
-  shift: Shift;
+  shift: ShiftForCard;
   weekStart: string;
   onDelete: (id: string) => void;
-  onFindSubstitute: (shift: Shift) => void;
+  onFindSubstitute: (shift: ShiftForCard) => void;
   onUpdateNotes: (id: string, notes: string | null) => void;
   onDuplicate: (shiftId: string, targetDate: string) => void;
 }) {

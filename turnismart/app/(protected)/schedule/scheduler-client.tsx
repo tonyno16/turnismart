@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo, useCallback, memo } from "react";
+import { useState, useTransition, useMemo, useCallback, memo, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -106,13 +106,33 @@ export function SchedulerClient({
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
   const [showApplyTemplateModal, setShowApplyTemplateModal] = useState(false);
   const [showExportPdfModal, setShowExportPdfModal] = useState(false);
-  const [sickLeaveShift, setSickLeaveShift] = useState<Shift | null>(null);
+  const [sickLeaveShift, setSickLeaveShift] = useState<{
+    id: string;
+    date: string;
+    location_name: string;
+    role_name: string;
+    employee_name: string;
+  } | null>(null);
   const [filters, setFilters] = useState<SchedulerFiltersState>({
     roleId: "",
     preferredLocationId: "",
     onlyUncovered: false,
   });
   const [viewMode, setViewMode] = useState<"location" | "employee" | "role">("location");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const actionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const onOutside = (e: MouseEvent) => {
+      if (actionsRef.current && !actionsRef.current.contains(e.target as Node)) {
+        setActionsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onOutside);
+    return () => document.removeEventListener("mousedown", onOutside);
+  }, [actionsOpen]);
 
   const filteredEmployees = useMemo(() => {
     let list = employees;
@@ -299,7 +319,8 @@ export function SchedulerClient({
   );
 
   const handleFindSubstitute = useCallback(
-    (s: Shift) => setSickLeaveShift(s),
+    (s: { id: string; date: string; location_name: string; role_name: string; employee_name: string }) =>
+      setSickLeaveShift(s),
     []
   );
 
@@ -353,11 +374,12 @@ export function SchedulerClient({
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] gap-4 overflow-hidden">
+    <div className="flex min-h-[400px] flex-col gap-4 overflow-hidden lg:h-[calc(100vh-4rem)] lg:flex-row">
       <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-200 pb-4 dark:border-zinc-800">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+        <div className="flex flex-col gap-3 border-b border-zinc-200 pb-4 dark:border-zinc-800 sm:gap-4">
+          {/* Row 1: Title + Vista + Week nav */}
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+            <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">
               Programmazione
             </h1>
             <div className="flex items-center gap-2">
@@ -365,16 +387,16 @@ export function SchedulerClient({
               <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-700">
                 {(
                   [
-                    ["location", "Per sede"],
-                    ["employee", "Per dipendente"],
-                    ["role", "Per ruolo"],
+                    ["location", "Sede"],
+                    ["employee", "Dipendente"],
+                    ["role", "Ruolo"],
                   ] as const
                 ).map(([mode, label]) => (
                   <button
                     key={mode}
                     type="button"
                     onClick={() => setViewMode(mode)}
-                    className={`px-3 py-1.5 text-xs font-medium ${
+                    className={`px-2 py-1.5 text-xs font-medium sm:px-3 ${
                       viewMode === mode
                         ? "bg-[hsl(var(--primary))] text-white"
                         : "bg-transparent text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
@@ -390,87 +412,137 @@ export function SchedulerClient({
               locations={locations}
               filters={filters}
               onChange={setFilters}
+              collapsed={true}
             />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <button
                 onClick={() => navigateWeek(-1)}
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-600"
+                className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600"
               >
                 ←
               </button>
-              <span className="min-w-[180px] text-center font-medium">
+              <span className="min-w-[140px] text-center text-sm font-medium sm:min-w-[180px]">
                 {format(parseISO(weekStart), "d MMM yyyy", { locale: it })} –{" "}
                 {format(addDays(parseISO(weekStart), 6), "d MMM yyyy", { locale: it })}
               </span>
               <button
                 onClick={() => navigateWeek(1)}
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-600"
+                className="rounded-lg border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-600"
               >
                 →
               </button>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setShowReplicateModal(true)}
-              disabled={pending}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
-            >
-              Replica settimana prec.
-            </button>
-            <button
-              onClick={() => setShowSaveTemplateModal(true)}
-              disabled={pending}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
-            >
-              Salva template
-            </button>
-            <button
-              onClick={() => setShowApplyTemplateModal(true)}
-              disabled={pending}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
-            >
-              Applica template
-            </button>
-            <button
-              onClick={() => setShowExportPdfModal(true)}
-              disabled={pending}
-              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
-            >
-              Esporta PDF
-            </button>
-            <button
-              onClick={() => setShowAIModal(true)}
-              className="flex items-center gap-2 rounded-lg border border-[hsl(var(--primary))] px-3 py-2 text-sm font-medium text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/10"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="h-4 w-4"
-              >
-                <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z" />
-              </svg>
-              Genera con AI
-            </button>
-            <div className="text-sm text-zinc-500">
-              {stats.totalShifts} turni · {stats.totalHours}h · {stats.employeesScheduled} dipendenti
+          {/* Row 2: Actions + Stats + Status + Publish */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Azioni dropdown su md-down */}
+              <div ref={actionsRef} className="relative md:hidden">
+                <button
+                  type="button"
+                  onClick={() => setActionsOpen((o) => !o)}
+                  className="flex cursor-pointer items-center gap-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  Azioni ▾
+                </button>
+                {actionsOpen && (
+                  <div className="absolute left-0 top-full z-20 mt-1 w-48 rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
+                    <button
+                      onClick={() => { setShowReplicateModal(true); setActionsOpen(false); }}
+                      disabled={pending}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50"
+                    >
+                      Replica settimana prec.
+                    </button>
+                    <button
+                      onClick={() => { setShowSaveTemplateModal(true); setActionsOpen(false); }}
+                      disabled={pending}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50"
+                    >
+                      Salva template
+                    </button>
+                    <button
+                      onClick={() => { setShowApplyTemplateModal(true); setActionsOpen(false); }}
+                      disabled={pending}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50"
+                    >
+                      Applica template
+                    </button>
+                    <button
+                      onClick={() => { setShowExportPdfModal(true); setActionsOpen(false); }}
+                      disabled={pending}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50"
+                    >
+                      Esporta PDF
+                    </button>
+                    <button
+                      onClick={() => { setShowAIModal(true); setActionsOpen(false); }}
+                      className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                    >
+                      Genera con AI
+                    </button>
+                  </div>
+                )}
+              </div>
+              {/* Bottoni azioni visibili da md in su */}
+              <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2">
+                <button
+                  onClick={() => setShowReplicateModal(true)}
+                  disabled={pending}
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+                >
+                  Replica
+                </button>
+                <button
+                  onClick={() => setShowSaveTemplateModal(true)}
+                  disabled={pending}
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+                >
+                  Template
+                </button>
+                <button
+                  onClick={() => setShowExportPdfModal(true)}
+                  disabled={pending}
+                  className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+                >
+                  PDF
+                </button>
+                <button
+                  onClick={() => setShowAIModal(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-[hsl(var(--primary))] px-3 py-2 text-sm font-medium text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/10"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className="h-4 w-4"
+                  >
+                    <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z" />
+                  </svg>
+                  AI
+                </button>
+              </div>
             </div>
-            <span
-              className={`rounded-full px-2 py-0.5 text-xs ${
-                schedule.status === "published"
-                  ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400"
-                  : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-              }`}
-            >
-              {schedule.status === "draft"
-                ? "Bozza"
-                : schedule.status === "published"
-                ? "Pubblicato"
-                : "Modificato"}
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-zinc-500 sm:text-sm">
+                {stats.totalShifts} turni · {stats.totalHours}h
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs ${
+                  schedule.status === "published"
+                    ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400"
+                    : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                }`}
+              >
+                {schedule.status === "draft"
+                  ? "Bozza"
+                  : schedule.status === "published"
+                  ? "Pubblicato"
+                  : "Modificato"}
+              </span>
+            </div>
             <button
               onClick={() => {
                 startTransition(async () => {
@@ -491,9 +563,46 @@ export function SchedulerClient({
           </div>
         </div>
 
-        <div className="mt-4 flex flex-1 overflow-auto">
+        <div className="relative mt-4 flex flex-1 overflow-auto [-webkit-overflow-scrolling:touch]">
+          {/* Toggle dipendenti su mobile/tablet (< lg) */}
+          {viewMode === "location" && (
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="fixed bottom-6 left-1/2 z-30 -translate-x-1/2 rounded-full bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-white shadow-lg lg:hidden"
+            >
+              Dipendenti
+            </button>
+          )}
+          {/* Overlay slide-in sidebar su < lg */}
+          {sidebarOpen && (
+            <>
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setSidebarOpen(false)}
+                onKeyDown={(e) => e.key === "Escape" && setSidebarOpen(false)}
+                className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+                aria-label="Chiudi pannello dipendenti"
+              />
+              <div className="fixed inset-y-0 right-0 z-50 w-64 overflow-y-auto border-l border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900 lg:hidden">
+                <div className="flex items-center justify-between pb-2">
+                  <h3 className="text-sm font-semibold">Dipendenti</h3>
+                  <button
+                    type="button"
+                    onClick={() => setSidebarOpen(false)}
+                    className="rounded p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                    aria-label="Chiudi"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <EmployeeSidebar employees={filteredEmployees} shifts={shifts} weekStart={weekStart} />
+              </div>
+            </>
+          )}
           <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div className="flex-1 overflow-auto">
+            <div className="flex min-w-0 flex-1 overflow-auto [-webkit-overflow-scrolling:touch]">
               <div className="min-w-[800px]">
                 <table className="w-full border-collapse text-sm">
                   <thead>
@@ -736,7 +845,7 @@ export function SchedulerClient({
               </div>
             </div>
 
-            <div className="w-56 shrink-0 border-l border-zinc-200 pl-4 dark:border-zinc-800">
+            <div className="hidden w-56 shrink-0 border-l border-zinc-200 pl-4 dark:border-zinc-800 lg:block">
               {viewMode !== "location" && (
                 <p className="mb-2 text-xs text-amber-600 dark:text-amber-500">
                   Vista sola lettura. Passa a &quot;Per sede&quot; per assegnare.
@@ -834,7 +943,7 @@ const ShiftCell = memo(function ShiftCell({
   required: number;
   weekStart: string;
   onDelete: (id: string) => void;
-  onFindSubstitute: (shift: Shift) => void;
+  onFindSubstitute: (shift: { id: string; date: string; location_name: string; role_name: string; employee_name: string }) => void;
   onUpdateNotes: (id: string, notes: string | null) => void;
   onDuplicate: (shiftId: string, targetDate: string) => void;
 }) {

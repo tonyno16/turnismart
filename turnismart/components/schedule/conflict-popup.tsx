@@ -12,7 +12,7 @@ export function ConflictPopup({
   pending: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="mx-4 max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-900">
         <h3 className="text-lg font-semibold text-amber-600 dark:text-amber-400">
           Attenzione

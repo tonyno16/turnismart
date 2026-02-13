@@ -180,7 +180,7 @@ export function EmployeesTableClient({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
+      <div className="overflow-x-auto rounded-xl border border-zinc-200 [-webkit-overflow-scrolling:touch] dark:border-zinc-800">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/50">

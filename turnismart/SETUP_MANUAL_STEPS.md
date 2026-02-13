@@ -177,6 +177,25 @@ Dopo ogni servizio, aggiungi o aggiorna le variabili in `turnismart/.env.local`:
 
 ---
 
+## 6.1 E2E Test: Onboarding Flow
+
+Per eseguire il test E2E che valida il flusso completo onboarding → schedule → pubblica:
+
+1. **Crea `e2e/.env.test`** con le stesse credenziali usate per gli E2E:
+   ```
+   TEST_USER_EMAIL=tua-email@esempio.com
+   TEST_USER_PASSWORD=tuapassword
+   ```
+
+2. **Esegui** (lo script resetta `onboarding_completed` per l’utente, poi lancia i test):
+   ```bash
+   npm run e2e:onboarding
+   ```
+
+Lo script `scripts/reset-onboarding-e2e.ts` legge `TEST_USER_EMAIL` da `e2e/.env.test` e `DATABASE_URL` da `.env.local`, imposta `onboarding_completed=false` sull’organizzazione dell’utente e poi avvia i test Playwright.
+
+---
+
 ## 7. Verifica
 
 1. Controlla che tutte le variabili siano in `.env.local`
