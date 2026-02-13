@@ -21,10 +21,10 @@
 - Eccezioni: "dal 10 al 17 febbraio non posso il mercoledì"
 
 ### Success Criteria
-- [ ] Griglia disponibilità: per ogni cella (giorno × fascia) stato: Disponibile | Preferito | Evitare | Non disponibile
-- [ ] Toggle "Preferisco mattina" / "Preferisco sera" / "Nessuna preferenza"
-- [ ] Sezione "Eccezioni": date range + giorni da escludere (es. 10-17 feb, no mercoledì)
-- [ ] AI scheduler e validazione usano questi dati
+- [x] Griglia disponibilità: per ogni cella (giorno × fascia) stato: Disponibile | Preferito | Evitare | Non disponibile
+- [x] Toggle "Preferisco mattina" / "Preferisco sera" / "Nessuna preferenza"
+- [x] Sezione "Eccezioni": date range + giorni da escludere (es. 10-17 feb, no mercoledì)
+- [x] AI scheduler e validazione usano questi dati
 
 ---
 
@@ -101,19 +101,19 @@ Alternativa: `period_preference` direttamente su `employees` (1 colonna).
 ## 6. Implementation Plan
 
 ### Phase 1: Status Avoid
-- [ ] **1.1** Aggiungere 'avoid' a availabilityStatuses se necessario
-- [ ] **1.2** Aggiornare griglia per mostrare 4 stati
+- [x] **1.1** Aggiungere 'avoid' a availabilityStatuses
+- [x] **1.2** Aggiornare griglia per mostrare 4 stati
 
 ### Phase 2: Period Preference
-- [ ] **2.1** Migration: period_preference su employees
-- [ ] **2.2** Form in profile/availability
-- [ ] **2.3** Usare in AI (peso preferenza)
+- [x] **2.1** Migration: period_preference su employees
+- [x] **2.2** Radio in AvailabilityExceptionsSection
+- [x] **2.3** Usare in AI (periodPreference nel prompt)
 
 ### Phase 3: Eccezioni
-- [ ] **3.1** Migration: employee_availability_exceptions
-- [ ] **3.2** CRUD actions
-- [ ] **3.3** UI sezione eccezioni
-- [ ] **3.4** Integrare in schedule-validation e ai-schedule
+- [x] **3.1** Migration: employee_availability_exceptions
+- [x] **3.2** addAvailabilityException, removeAvailabilityException
+- [x] **3.3** UI sezione eccezioni (date range + giorni)
+- [x] **3.4** Integrare in schedule-validation e ai-schedule
 
 ---
 

@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import { accountantClients } from "./accountant-clients";
 import { employeeAvailability } from "./employee-availability";
+import { employeeAvailabilityExceptions } from "./employee-availability-exceptions";
 import { employeeIncompatibilities } from "./employee-incompatibilities";
 import { employeeRoles } from "./employee-roles";
 import { employeeTimeOff } from "./employee-time-off";
@@ -17,6 +18,7 @@ import { notifications } from "./notifications";
 import { reports } from "./reports";
 import { reportGenerationJobs } from "./report-generation-jobs";
 import { italianHolidays } from "./italian-holidays";
+import { scheduleTemplates } from "./schedule-templates";
 import { schedules } from "./schedules";
 import { shifts } from "./shifts";
 import { shiftRequests } from "./shift-requests";
@@ -51,6 +53,7 @@ export {
   availabilityStatuses,
   type AvailabilityStatus,
 } from "./employee-availability";
+export { employeeAvailabilityExceptions } from "./employee-availability-exceptions";
 export { employeeIncompatibilities } from "./employee-incompatibilities";
 export {
   employeeTimeOff,
@@ -89,6 +92,10 @@ export {
   type ReportJobStatus,
 } from "./report-generation-jobs";
 export { italianHolidays } from "./italian-holidays";
+export {
+  scheduleTemplates,
+  type ScheduleTemplateWeekData,
+} from "./schedule-templates";
 export {
   schedules,
   scheduleStatuses,
@@ -170,6 +177,7 @@ export const employeesRelations = relations(employees, ({ one, many }) => ({
   preferredLocation: one(locations),
   employeeRoles: many(employeeRoles),
   availability: many(employeeAvailability),
+  availabilityExceptions: many(employeeAvailabilityExceptions),
   timeOff: many(employeeTimeOff),
 }));
 
@@ -180,6 +188,13 @@ export const employeeRolesRelations = relations(employeeRoles, ({ one }) => ({
 
 export const employeeAvailabilityRelations = relations(
   employeeAvailability,
+  ({ one }) => ({
+    employee: one(employees),
+  })
+);
+
+export const employeeAvailabilityExceptionsRelations = relations(
+  employeeAvailabilityExceptions,
   ({ one }) => ({
     employee: one(employees),
   })

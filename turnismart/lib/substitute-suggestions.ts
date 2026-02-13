@@ -197,6 +197,7 @@ export async function findBestSubstitutes(params: {
 
     let score = 50;
     if (av?.status === "preferred") score += 15;
+    if (av?.status === "avoid") score -= 10;
     score += Math.min(20, hoursRemaining / 2);
     if (emp.preferred_location_id === params.locationId) score += 15;
     const fairness = Math.max(0, 20 - weekShifts.length * 2);

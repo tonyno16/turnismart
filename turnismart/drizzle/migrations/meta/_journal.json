@@ -92,6 +92,20 @@
       "when": 1770887600000,
       "tag": "0013_employee_roles_hourly_rate",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1770887700000,
+      "tag": "0014_employee_preferences_exceptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1770887800000,
+      "tag": "0015_schedule_templates",
+      "breakpoints": true
     }
   ]
 }

@@ -16,7 +16,10 @@ import { it } from "date-fns/locale";
 import { toast } from "sonner";
 import { createShift, deleteShift, publishSchedule } from "@/app/actions/shifts";
 import { ReplicateWeekModal } from "@/components/schedule/replicate-week-modal";
+import { SaveTemplateModal } from "@/components/schedule/save-template-modal";
+import { ApplyTemplateModal } from "@/components/schedule/apply-template-modal";
 import { EmployeeSidebar } from "@/components/schedule/employee-sidebar";
+import { SchedulerFilters, type SchedulerFiltersState } from "@/components/schedule/scheduler-filters";
 import { ConflictPopup } from "@/components/schedule/conflict-popup";
 import { AIGenerationModal } from "@/components/schedule/ai-generation-modal";
 import { SickLeavePopup } from "@/components/schedule/sick-leave-popup";
@@ -42,7 +45,13 @@ type Shift = {
 };
 
 type Location = { id: string; name: string };
-type Employee = { id: string; first_name: string; last_name: string; weekly_hours: number };
+type Employee = {
+  id: string;
+  first_name: string;
+  last_name: string;
+  weekly_hours: number;
+  preferred_location_id: string | null;
+};
 type Role = { id: string; name: string };
 type Schedule = { id: string; status: string; week_start_date: string };
 type CoverageSlot = {
@@ -65,6 +74,7 @@ export function SchedulerClient({
   coverage,
   stats,
   weekStart,
+  employeeRoleIds,
 }: {
   schedule: Schedule;
   shifts: Shift[];
@@ -74,6 +84,7 @@ export function SchedulerClient({
   coverage: CoverageSlot[];
   stats: { totalShifts: number; totalHours: number; employeesScheduled: number };
   weekStart: string;
+  employeeRoleIds: Record<string, string[]>;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -89,9 +100,32 @@ export function SchedulerClient({
   } | null>(null);
   const [showAIModal, setShowAIModal] = useState(false);
   const [showReplicateModal, setShowReplicateModal] = useState(false);
+  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
+  const [showApplyTemplateModal, setShowApplyTemplateModal] = useState(false);
   const [sickLeaveShift, setSickLeaveShift] = useState<Shift | null>(null);
+  const [filters, setFilters] = useState<SchedulerFiltersState>({
+    roleId: "",
+    preferredLocationId: "",
+    onlyUncovered: false,
+  });
+  const [viewMode, setViewMode] = useState<"location" | "employee" | "role">("location");
 
-  const view = "location";
+  const filteredEmployees = useMemo(() => {
+    let list = employees;
+    if (filters.roleId) {
+      const roleIds = employeeRoleIds[filters.roleId] ? [filters.roleId] : [];
+      const withRole = new Set(
+        Object.entries(employeeRoleIds)
+          .filter(([, ids]) => ids.includes(filters.roleId))
+          .map(([eid]) => eid)
+      );
+      list = list.filter((e) => withRole.has(e.id));
+    }
+    if (filters.preferredLocationId) {
+      list = list.filter((e) => e.preferred_location_id === filters.preferredLocationId);
+    }
+    return list;
+  }, [employees, filters.roleId, filters.preferredLocationId, employeeRoleIds]);
 
   // Pre-index shifts by cell key for O(1) lookup
   const shiftIndex = useMemo(() => {
@@ -127,7 +161,7 @@ export function SchedulerClient({
 
   const handleDragStart = (event: DragStartEvent) => {
     const id = String(event.active.id);
-    const emp = employees.find((e) => e.id === id);
+    const emp = filteredEmployees.find((e) => e.id === id);
     if (emp) setActiveEmployee(emp);
   };
 
@@ -196,6 +230,60 @@ export function SchedulerClient({
     [weekStart, shiftIndex]
   );
 
+  const filteredLocationRoleRows = useMemo(() => {
+    if (!filters.onlyUncovered) {
+      return locations.flatMap((loc) =>
+        roles.map((role) => ({ locationId: loc.id, locationName: loc.name, roleId: role.id, roleName: role.name }))
+      );
+    }
+    return locations.flatMap((loc) =>
+      roles
+        .map((role) => {
+          let hasUncovered = false;
+          for (let day = 0; day < 7; day++) {
+            const d = parseISO(weekStart);
+            const cellDate = addDays(d, day);
+            const dateStr = format(cellDate, "yyyy-MM-dd");
+            for (const period of ["morning", "evening"]) {
+              const covKey = `${loc.id}:${role.id}:${day}:${period}`;
+              const cov = coverageIndex.get(covKey);
+              const required = cov?.required ?? 0;
+              if (required > 0) {
+                const key = `${loc.id}:${role.id}:${dateStr}:${period}`;
+                const shiftsHere = shiftIndex.get(key) ?? [];
+                if (shiftsHere.length < required) hasUncovered = true;
+              }
+            }
+          }
+          return { locationId: loc.id, locationName: loc.name, roleId: role.id, roleName: role.name, hasUncovered };
+        })
+        .filter((r) => r.hasUncovered)
+        .map(({ hasUncovered: _, ...r }) => r)
+    );
+  }, [locations, roles, filters.onlyUncovered, coverageIndex, shiftIndex, weekStart]);
+
+  const shiftsByEmployeeSlot = useMemo(() => {
+    const index = new Map<string, Shift>();
+    for (const s of shifts) {
+      if (s.status !== "active") continue;
+      const period = s.start_time >= "14:00" ? "evening" : "morning";
+      const key = `${s.employee_id}:${s.date}:${period}`;
+      index.set(key, s);
+    }
+    return index;
+  }, [shifts]);
+
+  const employeesByRole = useMemo(() => {
+    const map = new Map<string, Employee[]>();
+    for (const role of roles) {
+      const emps = filteredEmployees.filter(
+        (e) => (employeeRoleIds[e.id] ?? []).includes(role.id)
+      );
+      if (emps.length > 0) map.set(role.id, emps);
+    }
+    return map;
+  }, [filteredEmployees, roles, employeeRoleIds]);
+
   const handleDeleteShift = useCallback(
     (shiftId: string) => {
       startTransition(async () => {
@@ -245,6 +333,37 @@ export function SchedulerClient({
               Programmazione
             </h1>
             <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-500">Vista:</span>
+              <div className="flex rounded-lg border border-zinc-200 dark:border-zinc-700">
+                {(
+                  [
+                    ["location", "Per sede"],
+                    ["employee", "Per dipendente"],
+                    ["role", "Per ruolo"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setViewMode(mode)}
+                    className={`px-3 py-1.5 text-xs font-medium ${
+                      viewMode === mode
+                        ? "bg-[hsl(var(--primary))] text-white"
+                        : "bg-transparent text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                    } ${mode === "location" ? "rounded-l-md" : ""} ${mode === "role" ? "rounded-r-md" : ""}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <SchedulerFilters
+              roles={roles}
+              locations={locations}
+              filters={filters}
+              onChange={setFilters}
+            />
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => navigateWeek(-1)}
                 className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-600"
@@ -270,6 +389,20 @@ export function SchedulerClient({
               className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
             >
               Replica settimana prec.
+            </button>
+            <button
+              onClick={() => setShowSaveTemplateModal(true)}
+              disabled={pending}
+              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+            >
+              Salva template
+            </button>
+            <button
+              onClick={() => setShowApplyTemplateModal(true)}
+              disabled={pending}
+              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+            >
+              Applica template
             </button>
             <button
               onClick={() => setShowAIModal(true)}
@@ -331,7 +464,11 @@ export function SchedulerClient({
                   <thead>
                     <tr className="border-b border-zinc-200 dark:border-zinc-700">
                       <th className="sticky left-0 z-10 bg-zinc-50 p-2 text-left dark:bg-zinc-900">
-                        Sede / Ruolo
+                        {viewMode === "location"
+                          ? "Sede / Ruolo"
+                          : viewMode === "employee"
+                          ? "Dipendente"
+                          : "Ruolo / Dipendente"}
                       </th>
                       {DAY_LABELS.flatMap((_, day) =>
                         PERIODS.map((p, pi) => (
@@ -346,45 +483,214 @@ export function SchedulerClient({
                     </tr>
                   </thead>
                   <tbody>
-                    {locations.map((loc) =>
-                      roles.map((role) => (
-                        <tr
-                          key={`${loc.id}-${role.id}`}
-                          className="border-b border-zinc-100 dark:border-zinc-800"
-                        >
-                          <td className="sticky left-0 z-10 bg-white p-2 dark:bg-zinc-900">
-                            <span className="font-medium">{loc.name}</span>
-                            <span className="text-zinc-500"> / {role.name}</span>
+                    {viewMode === "location" && (
+                      <>
+                        {filteredLocationRoleRows.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={15}
+                              className="py-8 text-center text-sm text-zinc-500"
+                            >
+                              {filters.onlyUncovered
+                                ? "Nessuna cella scoperta"
+                                : "Nessun fabbisogno configurato"}
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredLocationRoleRows.map(
+                            ({
+                              locationId: locId,
+                              locationName: locName,
+                              roleId: roleIdR,
+                              roleName: roleNameR,
+                            }) => (
+                              <tr
+                                key={`${locId}-${roleIdR}`}
+                                className="border-b border-zinc-100 dark:border-zinc-800"
+                              >
+                                <td className="sticky left-0 z-10 bg-white p-2 dark:bg-zinc-900">
+                                  <span className="font-medium">{locName}</span>
+                                  <span className="text-zinc-500">
+                                    {" "}
+                                    / {roleNameR}
+                                  </span>
+                                </td>
+                                {Array.from({ length: 7 }, (_, day) =>
+                                  PERIODS.map((period) => {
+                                    const shiftsHere = getShiftsInCell(
+                                      locId,
+                                      roleIdR,
+                                      day,
+                                      period.id
+                                    );
+                                    const covKey = `${locId}:${roleIdR}:${day}:${period.id}`;
+                                    const cov = coverageIndex.get(covKey);
+                                    const assigned = shiftsHere.length;
+                                    const required = cov?.required ?? 0;
+                                    return (
+                                      <ShiftCell
+                                        key={`${locId}-${roleIdR}-${day}-${period.id}`}
+                                        locationId={locId}
+                                        roleId={roleIdR}
+                                        day={day}
+                                        period={period.id}
+                                        shifts={shiftsHere}
+                                        assigned={assigned}
+                                        required={required}
+                                        onDelete={handleDeleteShift}
+                                        onFindSubstitute={handleFindSubstitute}
+                                      />
+                                    );
+                                  })
+                                )}
+                              </tr>
+                            )
+                          )
+                        )}
+                      </>
+                    )}
+                    {viewMode === "employee" &&
+                      (filteredEmployees.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={15}
+                            className="py-8 text-center text-sm text-zinc-500"
+                          >
+                            Nessun dipendente per i filtri selezionati
                           </td>
-                          {Array.from({ length: 7 }, (_, day) =>
-                            PERIODS.map((period) => {
-                              const shiftsHere = getShiftsInCell(
-                                loc.id,
-                                role.id,
-                                day,
-                                period.id
-                              );
-                              const covKey = `${loc.id}:${role.id}:${day}:${period.id}`;
-                              const cov = coverageIndex.get(covKey);
-                              const assigned = shiftsHere.length;
-                              const required = cov?.required ?? 0;
-                              return (
-                                <ShiftCell
-                                  key={`${loc.id}-${role.id}-${day}-${period.id}`}
-                                  locationId={loc.id}
-                                  roleId={role.id}
-                                  day={day}
-                                  period={period.id}
-                                  shifts={shiftsHere}
-                                  assigned={assigned}
-                                  required={required}
-                                  onDelete={handleDeleteShift}
-                                  onFindSubstitute={handleFindSubstitute}
-                                />
-                              );
-                            })
-                          )}
                         </tr>
+                      ) : (
+                        <>
+                          {filteredEmployees.map((emp) => {
+                            const empHours = (
+                              shifts
+                                .filter(
+                                  (s) =>
+                                    s.employee_id === emp.id &&
+                                    s.status === "active"
+                                )
+                                .reduce((acc, s) => {
+                                  const [sh, sm] = s.start_time
+                                    .split(":")
+                                    .map(Number);
+                                  const [eh, em] = s.end_time
+                                    .split(":")
+                                    .map(Number);
+                                  return acc + (eh * 60 + em - sh * 60 - sm);
+                                }, 0) / 60
+                            ).toFixed(1);
+                            return (
+                              <tr
+                                key={emp.id}
+                                className="border-b border-zinc-100 dark:border-zinc-800"
+                              >
+                                <td className="sticky left-0 z-10 bg-white p-2 dark:bg-zinc-900">
+                                  <div className="font-medium">
+                                    {emp.first_name} {emp.last_name}
+                                  </div>
+                                  <div className="text-xs text-zinc-500">
+                                    {empHours}h
+                                  </div>
+                                </td>
+                                {Array.from({ length: 7 }, (_, day) =>
+                                  PERIODS.map((period) => {
+                                    const d = addDays(parseISO(weekStart), day);
+                                    const dateStr = format(d, "yyyy-MM-dd");
+                                    const key = `${emp.id}:${dateStr}:${period.id}`;
+                                    const shift =
+                                      shiftsByEmployeeSlot.get(key);
+                                    return (
+                                      <td
+                                        key={`${emp.id}-${day}-${period.id}`}
+                                        className="min-w-[80px] border-l border-zinc-100 p-1 align-top dark:border-zinc-800"
+                                      >
+                                        {shift ? (
+                                          <div className="group flex items-center justify-between gap-1 rounded bg-[hsl(var(--primary))]/15 px-2 py-1 text-xs">
+                                            <span className="truncate">
+                                              {shift.location_name} ·{" "}
+                                              {shift.role_name}
+                                            </span>
+                                            <span className="text-zinc-500">
+                                              {shift.start_time.slice(0, 5)}-
+                                              {shift.end_time.slice(0, 5)}
+                                            </span>
+                                          </div>
+                                        ) : null}
+                                      </td>
+                                    );
+                                  })
+                                )}
+                              </tr>
+                            );
+                          })}
+                        </>
+                      ))}
+                    {viewMode === "role" &&
+                      (employeesByRole.size === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={15}
+                            className="py-8 text-center text-sm text-zinc-500"
+                          >
+                            Nessun dipendente con mansioni assegnate
+                          </td>
+                        </tr>
+                      ) : (
+                        Array.from(employeesByRole.entries()).flatMap(
+                        ([roleId, emps]) => {
+                          const role = roles.find((r) => r.id === roleId);
+                          return [
+                            <tr
+                              key={`role-${roleId}`}
+                              className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/50"
+                            >
+                              <td
+                                colSpan={15}
+                                className="sticky left-0 p-2 font-semibold text-zinc-700 dark:text-zinc-300"
+                              >
+                                {role?.name ?? ""}
+                              </td>
+                            </tr>,
+                            ...emps.map((emp) => (
+                              <tr
+                                key={`${roleId}-${emp.id}`}
+                                className="border-b border-zinc-100 dark:border-zinc-800"
+                              >
+                                <td className="sticky left-0 z-10 bg-white pl-6 p-2 dark:bg-zinc-900">
+                                  <div className="font-medium">
+                                    {emp.first_name} {emp.last_name}
+                                  </div>
+                                </td>
+                                {Array.from({ length: 7 }, (_, day) =>
+                                  PERIODS.map((period) => {
+                                    const d = addDays(parseISO(weekStart), day);
+                                    const dateStr = format(d, "yyyy-MM-dd");
+                                    const key = `${emp.id}:${dateStr}:${period.id}`;
+                                    const shift = shiftsByEmployeeSlot.get(key);
+                                    return (
+                                      <td
+                                        key={`${emp.id}-${day}-${period.id}`}
+                                        className="min-w-[80px] border-l border-zinc-100 p-1 align-top dark:border-zinc-800"
+                                      >
+                                        {shift ? (
+                                          <div className="group flex items-center justify-between gap-1 rounded bg-[hsl(var(--primary))]/15 px-2 py-1 text-xs">
+                                            <span className="truncate">
+                                              {shift.location_name}
+                                            </span>
+                                            <span className="text-zinc-500">
+                                              {shift.start_time.slice(0, 5)}-
+                                              {shift.end_time.slice(0, 5)}
+                                            </span>
+                                          </div>
+                                        ) : null}
+                                      </td>
+                                    );
+                                  })
+                                )}
+                              </tr>
+                            )),
+                          ];
+                        }
                       ))
                     )}
                   </tbody>
@@ -393,7 +699,12 @@ export function SchedulerClient({
             </div>
 
             <div className="w-56 shrink-0 border-l border-zinc-200 pl-4 dark:border-zinc-800">
-              <EmployeeSidebar employees={employees} shifts={shifts} weekStart={weekStart} />
+              {viewMode !== "location" && (
+                <p className="mb-2 text-xs text-amber-600 dark:text-amber-500">
+                  Vista sola lettura. Passa a &quot;Per sede&quot; per assegnare.
+                </p>
+              )}
+              <EmployeeSidebar employees={filteredEmployees} shifts={shifts} weekStart={weekStart} />
             </div>
 
             <DragOverlay>
@@ -418,6 +729,18 @@ export function SchedulerClient({
           scheduleId={schedule.id}
           weekStart={weekStart}
           onClose={() => setShowReplicateModal(false)}
+        />
+      )}
+      {showSaveTemplateModal && (
+        <SaveTemplateModal
+          scheduleId={schedule.id}
+          onClose={() => setShowSaveTemplateModal(false)}
+        />
+      )}
+      {showApplyTemplateModal && (
+        <ApplyTemplateModal
+          weekStart={weekStart}
+          onClose={() => setShowApplyTemplateModal(false)}
         />
       )}
       {sickLeaveShift && (

@@ -8,7 +8,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { employees } from "./employees";
 
-export const availabilityStatuses = ["available", "unavailable", "preferred"] as const;
+export const availabilityStatuses = ["available", "unavailable", "preferred", "avoid"] as const;
 export type AvailabilityStatus = (typeof availabilityStatuses)[number];
 
 export const availabilityShiftPeriods = ["morning", "evening"] as const;

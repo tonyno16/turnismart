@@ -8,6 +8,7 @@ import {
   employees,
   employeeRoles,
   employeeAvailability,
+  employeeAvailabilityExceptions,
   employeeIncompatibilities,
   employeeTimeOff,
   roles,
@@ -37,9 +38,11 @@ export type SchedulingConstraint = {
     roleIds: string[];
     weeklyHours: number;
     maxHours: number;
+    periodPreference?: "morning" | "evening" | null;
     availability: Array<{ dayOfWeek: number; period: string; status: string }>;
     incompatibleWith: string[];
     timeOffDates: string[];
+    exceptionDates: string[];
   }>;
 };
 
@@ -96,6 +99,7 @@ export async function collectSchedulingConstraints(
     .where(eq(roles.organization_id, organizationId));
 
   const avail = await db.select().from(employeeAvailability);
+  const exceptions = await db.select().from(employeeAvailabilityExceptions);
   const inc = await db.select().from(employeeIncompatibilities);
   const to = await db
     .select()
@@ -139,12 +143,29 @@ export async function collectSchedulingConstraints(
         return dates;
       });
 
+    const weekEnd = format(addDays(parseISO(weekStart), 6), "yyyy-MM-dd");
+    const exceptionDates = exceptions
+      .filter((ex) => ex.employee_id === e.id && ex.start_date <= weekEnd && ex.end_date >= weekStart)
+      .flatMap((ex) => {
+        const start = parseISO(ex.start_date);
+        const end = parseISO(ex.end_date);
+        const dates: string[] = [];
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          const dow = (d.getDay() + 6) % 7;
+          if (dow === ex.day_of_week) {
+            dates.push(format(d, "yyyy-MM-dd"));
+          }
+        }
+        return dates;
+      });
+
     return {
       id: e.id,
       name: `${e.first_name} ${e.last_name}`,
       roleIds: ers.map((r) => r.role_id),
       weeklyHours: e.weekly_hours,
       maxHours: e.max_weekly_hours,
+      periodPreference: e.period_preference ?? null,
       availability: av.map((a) => ({
         dayOfWeek: a.day_of_week,
         period: a.shift_period,
@@ -152,6 +173,7 @@ export async function collectSchedulingConstraints(
       })),
       incompatibleWith: otherIds,
       timeOffDates: toDates,
+      exceptionDates,
     };
   });
 
@@ -193,12 +215,13 @@ PERIODI ORARI:
 ${JSON.stringify(periodTimes)}
 
 REGOLE:
-1. Assegna solo dipendenti disponibili (availability status "available" o "preferred", NON "unavailable")
-2. Rispetta timeOffDates: non assegnare in quelle date
-3. Non assegnare due dipendenti incompatibili (incompatibleWith) allo stesso turno
-4. Ogni dipendente max maxHours ore/settimana
-5. Riposo 11h tra turni consecutivi
-6. Un dipendente deve avere il ruolo richiesto (roleIds contiene roleId del turno)
+1. Assegna solo dipendenti disponibili (availability status "available", "preferred" o "avoid". "unavailable" = mai. "avoid" = evita se possibile)
+2. Rispetta timeOffDates e exceptionDates: non assegnare in quelle date
+3. periodPreference: se presente, preferisci turni mattina/sera di conseguenza (ma puoi ignorare se necessario)
+4. Non assegnare due dipendenti incompatibili (incompatibleWith) allo stesso turno
+5. Ogni dipendente max maxHours ore/settimana
+6. Riposo 11h tra turni consecutivi
+7. Un dipendente deve avere il ruolo richiesto (roleIds contiene roleId del turno)
 
 Rispondi SOLO con un array JSON di oggetti: [{"employeeId":"uuid","locationId":"uuid","roleId":"uuid","dayOfWeek":0-6,"period":"morning|evening"}]
 Nessun altro testo.`;

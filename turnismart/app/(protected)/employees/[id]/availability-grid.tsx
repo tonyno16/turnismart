@@ -6,7 +6,7 @@ import { updateAvailability } from "@/app/actions/employees";
 
 const DAYS = 7;
 const PERIODS = ["morning", "evening"] as const;
-const STATUSES = ["available", "unavailable", "preferred"] as const;
+const STATUSES = ["available", "unavailable", "preferred", "avoid"] as const;
 
 type AvailabilityItem = {
   day_of_week: number;
@@ -20,6 +20,7 @@ const statusLabels: Record<string, string> = {
   available: "✓",
   unavailable: "✗",
   preferred: "★",
+  avoid: "⚠",
 };
 
 export function EmployeeAvailabilityGrid({
@@ -73,7 +74,7 @@ export function EmployeeAvailabilityGrid({
   return (
     <div className="mt-4">
       <p className="mb-2 text-xs text-zinc-500">
-        ✓ Disponibile · ✗ Non disponibile · ★ Preferito — clic per cambiare
+        ✓ Disponibile · ✗ Non disponibile · ★ Preferito · ⚠ Evitare — clic per cambiare
       </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[320px] text-sm">
@@ -112,6 +113,8 @@ export function EmployeeAvailabilityGrid({
                           ? "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400"
                           : status === "preferred"
                           ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-400"
+                          : status === "avoid"
+                          ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400"
                           : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
                       }`}
                       title={status}

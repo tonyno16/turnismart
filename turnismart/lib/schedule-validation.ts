@@ -5,6 +5,7 @@ import {
   shifts,
   employees,
   employeeAvailability,
+  employeeAvailabilityExceptions,
   employeeIncompatibilities,
   employeeTimeOff,
 } from "@/drizzle/schema";
@@ -230,6 +231,37 @@ export async function checkAvailability(
   return null;
 }
 
+/** Check if employee has an availability exception for this date */
+export async function checkAvailabilityException(
+  employeeId: string,
+  date: string
+): Promise<ValidationConflict | null> {
+  const d = parseISO(date);
+  const dayOfWeek = (d.getDay() + 6) % 7;
+  const dateStr = format(d, "yyyy-MM-dd");
+
+  const ex = await db
+    .select()
+    .from(employeeAvailabilityExceptions)
+    .where(
+      and(
+        eq(employeeAvailabilityExceptions.employee_id, employeeId),
+        eq(employeeAvailabilityExceptions.day_of_week, dayOfWeek),
+        lte(employeeAvailabilityExceptions.start_date, dateStr),
+        gte(employeeAvailabilityExceptions.end_date, dateStr)
+      )
+    )
+    .limit(1);
+
+  if (ex.length > 0) {
+    return {
+      type: "availability",
+      message: "Eccezione: non disponibile in questa data",
+    };
+  }
+  return null;
+}
+
 /** Check if employee has approved time-off on this date */
 export async function checkTimeOff(
   employeeId: string,
@@ -279,7 +311,7 @@ export async function validateShiftAssignment(params: {
       : "morning";
 
   // Batch 1: fast, independent checks in parallel
-  const [overlapResult, availResult, timeOffResult] = await Promise.all([
+  const [overlapResult, availResult, timeOffResult, exceptionResult] = await Promise.all([
     checkOverlap(
       params.employeeId,
       params.date,
@@ -290,10 +322,12 @@ export async function validateShiftAssignment(params: {
     ),
     checkAvailability(params.employeeId, dayOfWeek, period),
     checkTimeOff(params.employeeId, params.date),
+    checkAvailabilityException(params.employeeId, params.date),
   ]);
   if (overlapResult) return overlapResult;
   if (availResult) return availResult;
   if (timeOffResult) return timeOffResult;
+  if (exceptionResult) return exceptionResult;
 
   // Batch 2: heavier checks, only if batch 1 passes
   const [maxHoursResult, restResult, incompatResult] = await Promise.all([

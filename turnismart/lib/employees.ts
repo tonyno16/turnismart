@@ -5,6 +5,7 @@ import {
   employeeRoles,
   roles,
   employeeAvailability,
+  employeeAvailabilityExceptions,
   employeeIncompatibilities,
   employeeTimeOff,
 } from "@/drizzle/schema";
@@ -54,6 +55,25 @@ export async function getEmployeesByOrganization(
   return filtered;
 }
 
+/** Returns map of employeeId -> roleIds for scheduler filters */
+export async function getEmployeeRoleIdsForOrganization(organizationId: string) {
+  const rows = await db
+    .select({
+      employee_id: employeeRoles.employee_id,
+      role_id: employeeRoles.role_id,
+    })
+    .from(employeeRoles)
+    .innerJoin(employees, eq(employeeRoles.employee_id, employees.id))
+    .where(eq(employees.organization_id, organizationId));
+
+  const map: Record<string, string[]> = {};
+  for (const r of rows) {
+    if (!map[r.employee_id]) map[r.employee_id] = [];
+    map[r.employee_id].push(r.role_id);
+  }
+  return map;
+}
+
 export async function getEmployeeDetail(employeeId: string) {
   const [emp] = await db
     .select()
@@ -79,6 +99,12 @@ export async function getEmployeeDetail(employeeId: string) {
     .select()
     .from(employeeAvailability)
     .where(eq(employeeAvailability.employee_id, employeeId));
+
+  const availabilityExceptions = await db
+    .select()
+    .from(employeeAvailabilityExceptions)
+    .where(eq(employeeAvailabilityExceptions.employee_id, employeeId))
+    .orderBy(employeeAvailabilityExceptions.start_date);
 
   const timeOff = await db
     .select()
@@ -124,6 +150,7 @@ export async function getEmployeeDetail(employeeId: string) {
     ...emp,
     roles: empRoles,
     availability,
+    availabilityExceptions,
     timeOff,
     incompatibilities,
   };

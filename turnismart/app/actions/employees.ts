@@ -7,6 +7,7 @@ import {
   employees,
   employeeRoles,
   employeeAvailability,
+  employeeAvailabilityExceptions,
   employeeIncompatibilities,
   employeeTimeOff,
   contractTypes,
@@ -263,6 +264,83 @@ export async function createIncompatibility(
   });
   revalidatePath(`/employees/${employeeAId}`);
   revalidatePath(`/employees/${employeeBId}`);
+}
+
+export async function updateEmployeePeriodPreference(
+  employeeId: string,
+  periodPreference: "morning" | "evening" | null
+) {
+  const { organization } = await requireOrganization();
+  const [emp] = await db
+    .select()
+    .from(employees)
+    .where(
+      and(
+        eq(employees.id, employeeId),
+        eq(employees.organization_id, organization.id)
+      )
+    )
+    .limit(1);
+  if (!emp) throw new Error("Dipendente non trovato");
+
+  await db
+    .update(employees)
+    .set({
+      period_preference: periodPreference,
+      updated_at: new Date(),
+    })
+    .where(eq(employees.id, employeeId));
+  revalidatePath(`/employees/${employeeId}`);
+}
+
+export async function addAvailabilityException(
+  employeeId: string,
+  startDate: string,
+  endDate: string,
+  dayOfWeek: number
+) {
+  const { organization } = await requireOrganization();
+  const [emp] = await db
+    .select()
+    .from(employees)
+    .where(
+      and(
+        eq(employees.id, employeeId),
+        eq(employees.organization_id, organization.id)
+      )
+    )
+    .limit(1);
+  if (!emp) throw new Error("Dipendente non trovato");
+  if (dayOfWeek < 0 || dayOfWeek > 6) throw new Error("Giorno non valido");
+  if (startDate > endDate) throw new Error("Data inizio deve essere ≤ data fine");
+
+  await db.insert(employeeAvailabilityExceptions).values({
+    employee_id: employeeId,
+    start_date: startDate,
+    end_date: endDate,
+    day_of_week: dayOfWeek,
+  });
+  revalidatePath(`/employees/${employeeId}`);
+}
+
+export async function removeAvailabilityException(exceptionId: string) {
+  const { organization } = await requireOrganization();
+  const [ex] = await db
+    .select({
+      id: employeeAvailabilityExceptions.id,
+      employee_id: employeeAvailabilityExceptions.employee_id,
+      org_id: employees.organization_id,
+    })
+    .from(employeeAvailabilityExceptions)
+    .innerJoin(employees, eq(employeeAvailabilityExceptions.employee_id, employees.id))
+    .where(eq(employeeAvailabilityExceptions.id, exceptionId))
+    .limit(1);
+  if (!ex || ex.org_id !== organization.id) throw new Error("Eccezione non trovata");
+
+  await db
+    .delete(employeeAvailabilityExceptions)
+    .where(eq(employeeAvailabilityExceptions.id, exceptionId));
+  revalidatePath(`/employees/${ex.employee_id}`);
 }
 
 /** Employee self-service: request time off (vacation, leave, sick) */

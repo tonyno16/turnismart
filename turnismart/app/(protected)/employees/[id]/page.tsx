@@ -3,9 +3,10 @@ import Link from "next/link";
 import { requireOrganization } from "@/lib/auth";
 import { getEmployeeDetail } from "@/lib/employees";
 import { getLocations } from "@/lib/locations";
-import { getOnboardingData } from "@/app/actions/onboarding";
+import { getRolesForOrganization } from "@/lib/roles";
 import { EmployeeProfileForm } from "./profile-form";
 import { EmployeeAvailabilityGrid } from "./availability-grid";
+import { AvailabilityExceptionsSection } from "./availability-exceptions-section";
 import { EmployeeRolesSection } from "./roles-section";
 import { DeleteEmployeeButton } from "./delete-employee-button";
 
@@ -29,8 +30,10 @@ export default async function EmployeeDetailPage({
     notFound();
   }
 
-  const { roles } = await getOnboardingData();
-  const locationsList = await getLocations(organization.id);
+  const [rolesList, locationsList] = await Promise.all([
+    getRolesForOrganization(organization.id),
+    getLocations(organization.id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -55,7 +58,7 @@ export default async function EmployeeDetailPage({
         </div>
         <EmployeeProfileForm
           employee={employee}
-          roles={roles}
+          roles={rolesList}
           locations={locationsList}
         />
       </div>
@@ -67,7 +70,7 @@ export default async function EmployeeDetailPage({
         <EmployeeRolesSection
           employeeId={employee.id}
           employeeRoles={employee.roles}
-          allRoles={roles}
+          allRoles={rolesList}
           baseHourlyRate={employee.hourly_rate ?? ""}
         />
       </div>
@@ -79,10 +82,17 @@ export default async function EmployeeDetailPage({
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
           Quando può lavorare (ricorrente)
         </p>
-        <EmployeeAvailabilityGrid
-          employeeId={employee.id}
-          availability={employee.availability}
-        />
+        <div className="mt-4 space-y-6">
+          <AvailabilityExceptionsSection
+            employeeId={employee.id}
+            periodPreference={employee.period_preference}
+            exceptions={employee.availabilityExceptions}
+          />
+          <EmployeeAvailabilityGrid
+            employeeId={employee.id}
+            availability={employee.availability}
+          />
+        </div>
       </div>
 
       <div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900/50">

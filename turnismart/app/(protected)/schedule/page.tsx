@@ -1,7 +1,7 @@
 import { requireOrganization } from "@/lib/auth";
 import { getWeekSchedule, getWeekStart, getStaffingCoverage, getWeekStats } from "@/lib/schedules";
 import { getLocations } from "@/lib/locations";
-import { getEmployeesByOrganization } from "@/lib/employees";
+import { getEmployeesByOrganization, getEmployeeRoleIdsForOrganization } from "@/lib/employees";
 import { getOnboardingData } from "@/app/actions/onboarding";
 import { SchedulerClient } from "./scheduler-client";
 
@@ -14,12 +14,14 @@ export default async function SchedulePage({
   const { organization } = await requireOrganization();
   const weekStart = params.week ?? getWeekStart(new Date().toISOString().slice(0, 10));
 
-  const [{ schedule, shifts }, locationsList, employeesList, { roles }] = await Promise.all([
-    getWeekSchedule(organization.id, weekStart),
-    getLocations(organization.id),
-    getEmployeesByOrganization(organization.id, { isActive: true }),
-    getOnboardingData(),
-  ]);
+  const [{ schedule, shifts }, locationsList, employeesList, { roles }, employeeRoleIds] =
+    await Promise.all([
+      getWeekSchedule(organization.id, weekStart),
+      getLocations(organization.id),
+      getEmployeesByOrganization(organization.id, { isActive: true }),
+      getOnboardingData(),
+      getEmployeeRoleIdsForOrganization(organization.id),
+    ]);
 
   const [coverage, stats] = await Promise.all([
     getStaffingCoverage(organization.id, weekStart, schedule.id),
@@ -36,6 +38,7 @@ export default async function SchedulePage({
       coverage={coverage}
       stats={stats}
       weekStart={weekStart}
+      employeeRoleIds={employeeRoleIds}
     />
   );
 }

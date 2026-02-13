@@ -36,6 +36,7 @@ export const employees = pgTable("employees", {
   preferred_location_id: uuid("preferred_location_id").references(() => locations.id, {
     onDelete: "set null",
   }),
+  period_preference: text("period_preference", { enum: ["morning", "evening"] }),
   is_active: boolean("is_active").default(true).notNull(),
   hired_at: date("hired_at"),
   notes: text("notes"),

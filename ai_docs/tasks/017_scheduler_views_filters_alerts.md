@@ -22,10 +22,10 @@ La vista attuale è solo "per sede" (righe = giorni/fasce, colonne = ...). Serve
 - Alert quando qualcuno va in straordinario
 
 ### Success Criteria
-- [ ] Toggle vista: Per Sede (attuale) | Per Dipendente | Per Ruolo
-- [ ] Filtri: mansione, sede preferita, ore già assegnate (min/max)
-- [ ] Employee sidebar: badge/indicatore rosso quando ore settimanali > weekly_hours
-- [ ] Toolbar con filtri collassabili
+- [x] Toggle vista: Per Sede (attuale) | Per Dipendente | Per Ruolo
+- [x] Filtri: mansione, sede preferita, toggle Solo scoperti
+- [x] Employee sidebar: badge/indicatore rosso quando ore settimanali > weekly_hours
+- [x] Toolbar con filtri collassabili
 
 ---
 
@@ -73,23 +73,23 @@ Tutti i dati già disponibili. Calcolo ore per dipendente: somma da shifts.
 ## 5. Implementation Plan
 
 ### Phase 1: Filtri
-- [ ] **1.1** Creare `SchedulerFilters` component con select mansione, sede, toggle scoperti
-- [ ] **1.2** Passare filtri a getEmployeesByOrganization o filtrare lato client
-- [ ] **1.3** Integrare in scheduler toolbar
+- [x] **1.1** Creare `SchedulerFilters` component con select mansione, sede, toggle scoperti
+- [x] **1.2** Filtrare lato client (employeeRoleIds, preferred_location_id)
+- [x] **1.3** Integrare in scheduler toolbar
 
 ### Phase 2: Alert Straordinari
-- [ ] **2.1** In EmployeeSidebar: calcolare ore per dipendente da shifts
-- [ ] **2.2** Mostrare badge/warning se > weekly_hours
-- [ ] **2.3** Stile: bordo rosso o icona warning
+- [x] **2.1** In EmployeeSidebar: calcolare ore per dipendente da shifts
+- [x] **2.2** Mostrare badge/warning se > weekly_hours
+- [x] **2.3** Stile: bordo rosso, badge "Straordinario"
 
 ### Phase 3: Vista per Dipendente
-- [ ] **3.1** Refactor grid: prop `viewMode: 'location' | 'employee' | 'role'`
-- [ ] **3.2** Render griglia con assi invertiti (righe = dipendenti)
-- [ ] **3.3** DnD: drop su cella (employee_id, date, period) → stesso createShift
+- [x] **3.1** Refactor grid: state `viewMode: 'location' | 'employee' | 'role'`
+- [x] **3.2** Render griglia con righe = dipendenti, celle = turni
+- [x] **3.3** Vista sola lettura (DnD in vista Per sede)
 
 ### Phase 4: Vista per Ruolo
-- [ ] **4.1** Raggruppare dipendenti per ruolo
-- [ ] **4.2** Render griglia con gruppi espandibili o flat
+- [x] **4.1** Raggruppare dipendenti per ruolo (employeesByRole)
+- [x] **4.2** Render griglia con riga header ruolo + sotto-righe dipendenti
 
 ---
 
