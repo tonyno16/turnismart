@@ -14,19 +14,18 @@ export default async function SchedulePage({
   const { organization } = await requireOrganization();
   const weekStart = params.week ?? getWeekStart(new Date().toISOString().slice(0, 10));
 
-  const [{ schedule, shifts }, locationsList, employeesList, { roles }, employeeRoleIds] =
+  const [{ schedule, shifts }, locationsList, employeesList, { roles }, employeeRoleIds, stats] =
     await Promise.all([
       getWeekSchedule(organization.id, weekStart),
       getLocations(organization.id),
       getEmployeesByOrganization(organization.id, { isActive: true }),
       getOnboardingData(),
       getEmployeeRoleIdsForOrganization(organization.id),
+      getWeekStats(organization.id, weekStart),
     ]);
 
-  const [coverage, stats] = await Promise.all([
-    getStaffingCoverage(organization.id, weekStart, schedule.id),
-    getWeekStats(organization.id, weekStart),
-  ]);
+  // coverage depends on schedule.id — must await separately
+  const coverage = await getStaffingCoverage(organization.id, weekStart, schedule.id);
 
   return (
     <SchedulerClient
