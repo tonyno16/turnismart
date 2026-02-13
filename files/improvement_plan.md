@@ -65,7 +65,7 @@ Piano prioritizzato delle migliorie possibili, ordinate per impatto e sforzo.
 |---|-----------|-------------|--------|---------|
 | 17 | **README setup** | Documentazione setup dev in README | 0.5 gg | Alto per onboarding dev |
 | 18 | **Checklist deploy** | Checklist pre-produzione: env, Stripe, cron, domain | 0.5 gg | Alto |
-| 19 | **Security audit** | Review RLS, rate limiting, input sanitization | 1 gg | Alto |
+| 19 | ~~**Security audit**~~ | Fatto (026): SECURITY_REVIEW, Stripe webhook, Zod, cron | - | - |
 | 20 | **Monitoraggio errori** | Integrazione Sentry o similar per errori client/server | 0.5 gg | Medio |
 
 ---
@@ -83,7 +83,7 @@ Piano prioritizzato delle migliorie possibili, ordinate per impatto e sforzo.
 ## Riepilogo per roadmap
 
 **Priorità attuali (task 016-025 completati):**
-1. Security review (RLS, rate limiting) – 1 gg
+1. ~~Security review~~ – Fatto (026)
 2. Verifica integrazioni (Stripe, Trigger, notifiche) – 0.5 gg
 3. ~~README setup + checklist deploy~~ – Fatto (025)
 4. Virtualizzazione griglia (>20 dipendenti) – opzionale

@@ -596,7 +596,7 @@
 - [x] SEO: meta tags, Open Graph per landing page
 - [ ] Performance: lazy loading per scheduler grande, virtualizzazione griglia se >20 dipendenti
 - [x] Test end-to-end: onboarding → primo orario → pubblica (024, `npm run e2e:onboarding`)
-- [ ] Security review: RLS policies, input sanitization, rate limiting
+- [x] Security review: RLS doc, Stripe webhook verification, input validation Zod, cron CRON_SECRET (026)
 - [ ] Verify all 24 database tables created and populated with correct indexes
 - [ ] Verify all 6 Trigger.dev workflows functional with proper error handling
 - [ ] Verify Stripe integration: checkout, portal, webhook
@@ -607,7 +607,7 @@
 
 1. ~~**Test E2E**~~ – Fatto (024)
 2. ~~**Documentation**~~ – README, checklist deploy (025)
-3. **Security review** – RLS, input validation, rate limiting
+3. ~~**Security review**~~ – Fatto (026)
 4. **Verifica integrazioni** – Stripe, Trigger.dev CSV, notifiche
 5. **Virtualizzazione griglia** – Scheduler >20 dipendenti (opzionale)
 

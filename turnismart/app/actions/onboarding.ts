@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -123,6 +124,25 @@ export async function completeStep3(formData: FormData) {
   }
 }
 
+const employeeRowSchema = z.object({
+  firstName: z.string().max(100).optional().default(""),
+  lastName: z.string().max(100).optional().default(""),
+  phone: z.string().max(50).optional(),
+  roleId: z.string().min(1).max(100).optional(),
+  weeklyHours: z.number().min(1).max(168).optional().default(40),
+});
+
+const employeesSchema = z.array(z.unknown()).transform((arr) => {
+  const parsed: z.infer<typeof employeeRowSchema>[] = [];
+  for (let i = 0; i < Math.min(arr.length, 50); i++) {
+    const result = employeeRowSchema.safeParse(arr[i]);
+    if (result.success && (result.data.firstName?.trim() || result.data.lastName?.trim())) {
+      parsed.push(result.data);
+    }
+  }
+  return parsed;
+});
+
 export async function completeStep4(formData: FormData) {
   const { organization } = await requireOrganization();
 
@@ -132,28 +152,30 @@ export async function completeStep4(formData: FormData) {
     .where(eq(roles.organization_id, organization.id));
   const [firstRole] = orgRoles;
 
-  const employeesData = formData.get("employees") as string;
-  if (!employeesData) return;
+  const employeesData = formData.get("employees");
+  if (typeof employeesData !== "string") return;
 
-  const rows = JSON.parse(employeesData) as Array<{
-    firstName: string;
-    lastName: string;
-    phone?: string;
-    roleId: string;
-    weeklyHours: number;
-  }>;
+  let rows: z.infer<typeof employeeRowSchema>[];
+  try {
+    const parsed = JSON.parse(employeesData);
+    rows = employeesSchema.parse(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    throw new Error("Dati dipendenti non validi");
+  }
 
   for (const row of rows) {
-    if (!row.firstName?.trim() || !row.lastName?.trim()) continue;
+    const firstName = row.firstName?.trim();
+    const lastName = row.lastName?.trim();
+    if (!firstName || !lastName) continue;
 
     const [emp] = await db
       .insert(employees)
       .values({
         organization_id: organization.id,
-        first_name: row.firstName.trim(),
-        last_name: row.lastName.trim(),
+        first_name: firstName,
+        last_name: lastName,
         phone: row.phone?.trim() || null,
-        weekly_hours: row.weeklyHours || 40,
+        weekly_hours: row.weeklyHours ?? 40,
       })
       .returning();
 

@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 
 let stripe: Stripe | null = null;
 
-function getStripe(): Stripe | null {
+export export function getStripe(): Stripe | null {
   if (!process.env.STRIPE_SECRET_KEY) return null;
   if (!stripe) {
     stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
