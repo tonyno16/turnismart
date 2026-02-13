@@ -41,6 +41,7 @@ export const shifts = pgTable("shifts", {
   status: text("status", { enum: shiftStatuses })
     .default("active")
     .notNull(),
+  notes: text("notes"),
   cancelled_reason: text("cancelled_reason"),
   created_at: timestamp("created_at", { withTimezone: true })
     .defaultNow()

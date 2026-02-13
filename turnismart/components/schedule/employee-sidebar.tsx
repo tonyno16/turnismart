@@ -17,14 +17,20 @@ function parseTimeMinutes(t: string): number {
   return (h ?? 0) * 60 + (m ?? 0);
 }
 
+type EquityBadge = "ok" | "low" | "high" | null;
+
 const EmployeeCard = memo(function EmployeeCard({
   employee,
   weekMinutes,
   weeklyHours,
+  shiftCount,
+  equityBadge,
 }: {
   employee: Employee;
   weekMinutes: number;
   weeklyHours: number;
+  shiftCount: number;
+  equityBadge: EquityBadge;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: employee.id,
@@ -34,6 +40,13 @@ const EmployeeCard = memo(function EmployeeCard({
   const hoursStr = hours.toFixed(1);
   const pct = weeklyHours > 0 ? Math.min(100, (hours / weeklyHours) * 100) : 0;
   const isOvertime = weeklyHours > 0 && hours > weeklyHours;
+
+  const equityLabel =
+    equityBadge === "low"
+      ? "Pochi turni"
+      : equityBadge === "high"
+        ? "Molti turni"
+        : null;
 
   return (
     <div
@@ -45,7 +58,13 @@ const EmployeeCard = memo(function EmployeeCard({
           ? "opacity-50"
           : "border-zinc-200 bg-white hover:border-[hsl(var(--primary))]/50 dark:border-zinc-700 dark:bg-zinc-800"
       } ${isOvertime ? "border-red-400/60 dark:border-red-500/40" : ""}`}
-      title={isOvertime ? `${hoursStr}h su ${weeklyHours} contrattuali (straordinario)` : undefined}
+      title={
+        isOvertime
+          ? `${hoursStr}h su ${weeklyHours} contrattuali (straordinario)`
+          : equityBadge
+            ? `${shiftCount} turni`
+            : undefined
+      }
     >
       <div className="flex items-center justify-between gap-1">
         <span className="font-medium">
@@ -54,6 +73,17 @@ const EmployeeCard = memo(function EmployeeCard({
         {isOvertime && (
           <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/40 dark:text-red-400">
             Straordinario
+          </span>
+        )}
+        {!isOvertime && equityLabel && (
+          <span
+            className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${
+              equityBadge === "low"
+                ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400"
+                : "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400"
+            }`}
+          >
+            {equityLabel}
           </span>
         )}
       </div>
@@ -94,6 +124,32 @@ export const EmployeeSidebar = memo(function EmployeeSidebar({
     return map;
   }, [shifts]);
 
+  const { empShiftCounts, equityByEmp } = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const s of shifts) {
+      if (s.employee_id && s.status === "active") {
+        counts.set(s.employee_id, (counts.get(s.employee_id) ?? 0) + 1);
+      }
+    }
+    const totalShifts = [...counts.values()].reduce((a, b) => a + b, 0);
+    const activeCount = employees.length;
+    const avg = activeCount > 0 ? totalShifts / activeCount : 0;
+    const equity = new Map<string, EquityBadge>();
+    if (totalShifts > 0 && avg > 0) {
+      for (const emp of employees) {
+        const c = counts.get(emp.id) ?? 0;
+        const ratio = c / avg;
+        if (ratio < 0.8) equity.set(emp.id, "low");
+        else if (ratio > 1.2) equity.set(emp.id, "high");
+        else equity.set(emp.id, "ok");
+      }
+    }
+    return {
+      empShiftCounts: counts,
+      equityByEmp: equity,
+    };
+  }, [shifts, employees]);
+
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
@@ -112,6 +168,8 @@ export const EmployeeSidebar = memo(function EmployeeSidebar({
               employee={emp}
               weekMinutes={empMinutes.get(emp.id) ?? 0}
               weeklyHours={emp.weekly_hours}
+              shiftCount={empShiftCounts.get(emp.id) ?? 0}
+              equityBadge={equityByEmp.get(emp.id) ?? null}
             />
           ))
         )}

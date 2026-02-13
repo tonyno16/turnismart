@@ -14,15 +14,17 @@ import {
 import { format, addWeeks, addDays, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { toast } from "sonner";
-import { createShift, deleteShift, publishSchedule } from "@/app/actions/shifts";
+import { createShift, deleteShift, publishSchedule, updateShiftNotes, duplicateShift } from "@/app/actions/shifts";
 import { ReplicateWeekModal } from "@/components/schedule/replicate-week-modal";
 import { SaveTemplateModal } from "@/components/schedule/save-template-modal";
 import { ApplyTemplateModal } from "@/components/schedule/apply-template-modal";
+import { ExportPdfModal } from "@/components/schedule/export-pdf-modal";
 import { EmployeeSidebar } from "@/components/schedule/employee-sidebar";
 import { SchedulerFilters, type SchedulerFiltersState } from "@/components/schedule/scheduler-filters";
 import { ConflictPopup } from "@/components/schedule/conflict-popup";
 import { AIGenerationModal } from "@/components/schedule/ai-generation-modal";
 import { SickLeavePopup } from "@/components/schedule/sick-leave-popup";
+import { ShiftCard } from "@/components/schedule/shift-card";
 
 const DAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 const PERIODS = [
@@ -42,6 +44,7 @@ type Shift = {
   start_time: string;
   end_time: string;
   status: string;
+  notes?: string | null;
 };
 
 type Location = { id: string; name: string };
@@ -102,6 +105,7 @@ export function SchedulerClient({
   const [showReplicateModal, setShowReplicateModal] = useState(false);
   const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
   const [showApplyTemplateModal, setShowApplyTemplateModal] = useState(false);
+  const [showExportPdfModal, setShowExportPdfModal] = useState(false);
   const [sickLeaveShift, setSickLeaveShift] = useState<Shift | null>(null);
   const [filters, setFilters] = useState<SchedulerFiltersState>({
     roleId: "",
@@ -299,6 +303,30 @@ export function SchedulerClient({
     []
   );
 
+  const handleUpdateNotes = useCallback(
+    (shiftId: string, notes: string | null) => {
+      startTransition(async () => {
+        const result = await updateShiftNotes(shiftId, notes);
+        if (result.ok) router.refresh();
+      });
+    },
+    [router, startTransition]
+  );
+
+  const handleDuplicateShift = useCallback(
+    (shiftId: string, targetDate: string) => {
+      startTransition(async () => {
+        const result = await duplicateShift(shiftId, targetDate);
+        if (result.ok) {
+          router.refresh();
+        } else {
+          toast.error(result.error);
+        }
+      });
+    },
+    [router, startTransition]
+  );
+
   const isEmpty = locations.length === 0 || employees.length === 0;
 
   if (isEmpty) {
@@ -403,6 +431,13 @@ export function SchedulerClient({
               className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
             >
               Applica template
+            </button>
+            <button
+              onClick={() => setShowExportPdfModal(true)}
+              disabled={pending}
+              className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
+            >
+              Esporta PDF
             </button>
             <button
               onClick={() => setShowAIModal(true)}
@@ -537,8 +572,11 @@ export function SchedulerClient({
                                         shifts={shiftsHere}
                                         assigned={assigned}
                                         required={required}
+                                        weekStart={weekStart}
                                         onDelete={handleDeleteShift}
                                         onFindSubstitute={handleFindSubstitute}
+                                        onUpdateNotes={handleUpdateNotes}
+                                        onDuplicate={handleDuplicateShift}
                                       />
                                     );
                                   })
@@ -743,6 +781,12 @@ export function SchedulerClient({
           onClose={() => setShowApplyTemplateModal(false)}
         />
       )}
+      {showExportPdfModal && (
+        <ExportPdfModal
+          scheduleId={schedule.id}
+          onClose={() => setShowExportPdfModal(false)}
+        />
+      )}
       {sickLeaveShift && (
         <SickLeavePopup
           shiftId={sickLeaveShift.id}
@@ -775,8 +819,11 @@ const ShiftCell = memo(function ShiftCell({
   shifts,
   assigned,
   required,
+  weekStart,
   onDelete,
   onFindSubstitute,
+  onUpdateNotes,
+  onDuplicate,
 }: {
   locationId: string;
   roleId: string;
@@ -785,8 +832,11 @@ const ShiftCell = memo(function ShiftCell({
   shifts: Shift[];
   assigned: number;
   required: number;
+  weekStart: string;
   onDelete: (id: string) => void;
   onFindSubstitute: (shift: Shift) => void;
+  onUpdateNotes: (id: string, notes: string | null) => void;
+  onDuplicate: (shiftId: string, targetDate: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `cell:${locationId}:${roleId}:${day}:${period}`,
@@ -801,30 +851,15 @@ const ShiftCell = memo(function ShiftCell({
     >
       <div className="min-h-[44px] space-y-1">
         {shifts.map((s) => (
-          <div
+          <ShiftCard
             key={s.id}
-            className="group flex items-center justify-between gap-1 rounded bg-[hsl(var(--primary))]/15 px-2 py-1 text-xs"
-          >
-            <span className="truncate">{s.employee_name}</span>
-            <div className="flex opacity-0 group-hover:opacity-100">
-              <button
-                onClick={() => onFindSubstitute(s)}
-                className="rounded p-0.5 hover:bg-[hsl(var(--primary))]/30"
-                title="Trova sostituto"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
-                  <path d="M10 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3.465 14.493a1.23 1.23 0 0 0 .41 1.412A9.957 9.957 0 0 0 10 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 0 0-13.074.003Z" />
-                </svg>
-              </button>
-              <button
-                onClick={() => onDelete(s.id)}
-                className="rounded p-0.5 hover:bg-red-500/30"
-                title="Rimuovi"
-              >
-                ×
-              </button>
-            </div>
-          </div>
+            shift={s}
+            weekStart={weekStart}
+            onDelete={onDelete}
+            onFindSubstitute={onFindSubstitute}
+            onUpdateNotes={onUpdateNotes}
+            onDuplicate={onDuplicate}
+          />
         ))}
         {required > 0 && (
           <div className="text-[10px] text-zinc-400">

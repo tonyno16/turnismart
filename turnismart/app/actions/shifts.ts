@@ -147,6 +147,90 @@ export async function updateShift(
   return { ok: true };
 }
 
+export async function updateShiftNotes(
+  shiftId: string,
+  notes: string | null
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { organization } = await requireOrganization();
+  const [shift] = await db
+    .select()
+    .from(shifts)
+    .where(
+      and(
+        eq(shifts.id, shiftId),
+        eq(shifts.organization_id, organization.id)
+      )
+    )
+    .limit(1);
+  if (!shift) return { ok: false, error: "Turno non trovato" };
+
+  await db
+    .update(shifts)
+    .set({
+      notes: notes?.trim() || null,
+      updated_at: new Date(),
+    })
+    .where(eq(shifts.id, shiftId));
+  revalidatePath("/schedule");
+  return { ok: true };
+}
+
+export async function duplicateShift(
+  shiftId: string,
+  targetDate: string
+): Promise<{ ok: true } | { ok: false; error: string; conflict?: ValidationConflict }> {
+  const { organization } = await requireOrganization();
+  const [shift] = await db
+    .select()
+    .from(shifts)
+    .where(
+      and(
+        eq(shifts.id, shiftId),
+        eq(shifts.organization_id, organization.id),
+        eq(shifts.status, "active")
+      )
+    )
+    .limit(1);
+  if (!shift) return { ok: false, error: "Turno non trovato" };
+
+  const [sched] = await db
+    .select()
+    .from(schedules)
+    .where(eq(schedules.id, shift.schedule_id))
+    .limit(1);
+  if (!sched) return { ok: false, error: "Programmazione non trovata" };
+
+  const conflict = await validateShiftAssignment({
+    employeeId: shift.employee_id,
+    organizationId: organization.id,
+    scheduleId: shift.schedule_id,
+    locationId: shift.location_id,
+    roleId: shift.role_id,
+    date: targetDate,
+    startTime: shift.start_time,
+    endTime: shift.end_time,
+    weekStart: sched.week_start_date,
+  });
+  if (conflict) return { ok: false, error: conflict.message, conflict };
+
+  await db.insert(shifts).values({
+    schedule_id: shift.schedule_id,
+    organization_id: organization.id,
+    location_id: shift.location_id,
+    employee_id: shift.employee_id,
+    role_id: shift.role_id,
+    date: targetDate,
+    start_time: shift.start_time,
+    end_time: shift.end_time,
+    break_minutes: shift.break_minutes,
+    is_auto_generated: false,
+    status: "active",
+    notes: shift.notes,
+  });
+  revalidatePath("/schedule");
+  return { ok: true };
+}
+
 export async function deleteShift(shiftId: string) {
   const { organization } = await requireOrganization();
   const [shift] = await db

@@ -62,6 +62,7 @@ export async function getWeekSchedule(organizationId: string, weekStart: string)
       end_time: shifts.end_time,
       break_minutes: shifts.break_minutes,
       status: shifts.status,
+      notes: shifts.notes,
     })
     .from(shifts)
     .innerJoin(locations, eq(shifts.location_id, locations.id))
