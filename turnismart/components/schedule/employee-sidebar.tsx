@@ -4,6 +4,7 @@ import { memo, useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
 
 type Employee = { id: string; first_name: string; last_name: string; weekly_hours: number };
+type Role = { id: string; name: string };
 type Shift = {
   employee_id: string;
   start_time: string;
@@ -21,12 +22,14 @@ type EquityBadge = "ok" | "low" | "high" | null;
 
 const EmployeeCard = memo(function EmployeeCard({
   employee,
+  roleNames,
   weekMinutes,
   weeklyHours,
   shiftCount,
   equityBadge,
 }: {
   employee: Employee;
+  roleNames: string;
   weekMinutes: number;
   weeklyHours: number;
   shiftCount: number;
@@ -66,10 +69,15 @@ const EmployeeCard = memo(function EmployeeCard({
             : undefined
       }
     >
-      <div className="flex items-center justify-between gap-1">
-        <span className="font-medium">
-          {employee.first_name} {employee.last_name}
-        </span>
+      <div className="flex min-w-0 flex-1 items-start justify-between gap-1">
+        <div className="min-w-0">
+          <div className="font-medium">
+            {employee.first_name} {employee.last_name}
+          </div>
+          {roleNames && (
+            <div className="mt-0.5 text-xs text-zinc-500">{roleNames}</div>
+          )}
+        </div>
         {isOvertime && (
           <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/40 dark:text-red-400">
             Straordinario
@@ -108,10 +116,14 @@ export const EmployeeSidebar = memo(function EmployeeSidebar({
   employees,
   shifts,
   weekStart,
+  roles,
+  employeeRoleIds,
 }: {
   employees: Employee[];
   shifts: Shift[];
   weekStart: string;
+  roles?: Role[];
+  employeeRoleIds?: Record<string, string[]>;
 }) {
   const empMinutes = useMemo(() => {
     const map = new Map<string, number>();
@@ -162,16 +174,26 @@ export const EmployeeSidebar = memo(function EmployeeSidebar({
         {employees.length === 0 ? (
           <p className="text-xs text-zinc-500">Nessun risultato per i filtri selezionati</p>
         ) : (
-          employees.map((emp) => (
-            <EmployeeCard
-              key={emp.id}
-              employee={emp}
-              weekMinutes={empMinutes.get(emp.id) ?? 0}
-              weeklyHours={emp.weekly_hours}
-              shiftCount={empShiftCounts.get(emp.id) ?? 0}
-              equityBadge={equityByEmp.get(emp.id) ?? null}
-            />
-          ))
+          employees.map((emp) => {
+            const roleNames =
+              roles && employeeRoleIds
+                ? (employeeRoleIds[emp.id] ?? [])
+                    .map((rid) => roles.find((r) => r.id === rid)?.name)
+                    .filter(Boolean)
+                    .join(", ") || ""
+                : "";
+            return (
+              <EmployeeCard
+                key={emp.id}
+                employee={emp}
+                roleNames={roleNames}
+                weekMinutes={empMinutes.get(emp.id) ?? 0}
+                weeklyHours={emp.weekly_hours}
+                shiftCount={empShiftCounts.get(emp.id) ?? 0}
+                equityBadge={equityByEmp.get(emp.id) ?? null}
+              />
+            );
+          })
         )}
       </div>
     </div>

@@ -28,8 +28,8 @@ import { ShiftCard } from "@/components/schedule/shift-card";
 
 const DAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 const PERIODS = [
-  { id: "morning", label: "M" },
-  { id: "evening", label: "S" },
+  { id: "morning", label: "Mattina" },
+  { id: "evening", label: "Sera" },
 ];
 
 type Shift = {
@@ -563,6 +563,20 @@ export function SchedulerClient({
           </div>
         </div>
 
+        {/* Legenda */}
+        <div className="mt-2 flex flex-wrap items-center gap-4 rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-400">
+          <span><strong>Mattina</strong> = turno prima delle 14:00</span>
+          <span><strong>Sera</strong> = turno dalle 14:00</span>
+          <span className="flex items-center gap-1.5">
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400">giallo</span>
+            = cella scoperta (assegna qualcuno)
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="rounded px-1.5 py-0.5 text-zinc-500">n/m</span>
+            = assegnati / richiesti
+          </span>
+        </div>
+
         <div className="relative mt-4 flex flex-1 overflow-auto [-webkit-overflow-scrolling:touch]">
           {/* Toggle dipendenti su mobile/tablet (< lg) */}
           {viewMode === "location" && (
@@ -597,7 +611,7 @@ export function SchedulerClient({
                     ✕
                   </button>
                 </div>
-                <EmployeeSidebar employees={filteredEmployees} shifts={shifts} weekStart={weekStart} />
+                <EmployeeSidebar employees={filteredEmployees} shifts={shifts} weekStart={weekStart} roles={roles} employeeRoleIds={employeeRoleIds} />
               </div>
             </>
           )}
@@ -607,20 +621,22 @@ export function SchedulerClient({
                 <table className="w-full border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-zinc-200 dark:border-zinc-700">
-                      <th className="sticky left-0 z-10 bg-zinc-50 p-2 text-left dark:bg-zinc-900">
+                      <th className="sticky left-0 z-10 min-w-[140px] bg-zinc-100 px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                         {viewMode === "location"
                           ? "Sede / Ruolo"
                           : viewMode === "employee"
                           ? "Dipendente"
                           : "Ruolo / Dipendente"}
                       </th>
-                      {DAY_LABELS.flatMap((_, day) =>
-                        PERIODS.map((p, pi) => (
+                      {DAY_LABELS.flatMap((dayLabel, day) =>
+                        PERIODS.map((p) => (
                           <th
                             key={`${day}-${p.id}`}
-                            className="p-1 text-center text-xs text-zinc-500"
+                            className="min-w-[90px] border-l border-zinc-200 px-2 py-2 text-center text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
+                            title={`${dayLabel} ${p.label}`}
                           >
-                            {pi === 1 ? day + 1 : ""} {p.label}
+                            <span className="block text-[10px] text-zinc-400">{dayLabel}</span>
+                            <span className="block mt-0.5">{p.label.slice(0, 3)}</span>
                           </th>
                         ))
                       )}
@@ -650,9 +666,9 @@ export function SchedulerClient({
                             }) => (
                               <tr
                                 key={`${locId}-${roleIdR}`}
-                                className="border-b border-zinc-100 dark:border-zinc-800"
+                                className="border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
                               >
-                                <td className="sticky left-0 z-10 bg-white p-2 dark:bg-zinc-900">
+                                <td className="sticky left-0 z-10 bg-white px-3 py-2.5 dark:bg-zinc-900">
                                   <span className="font-medium">{locName}</span>
                                   <span className="text-zinc-500">
                                     {" "}
@@ -729,13 +745,19 @@ export function SchedulerClient({
                             return (
                               <tr
                                 key={emp.id}
-                                className="border-b border-zinc-100 dark:border-zinc-800"
+                                className="group border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
                               >
-                                <td className="sticky left-0 z-10 bg-white p-2 dark:bg-zinc-900">
+                                <td className="sticky left-0 z-10 min-w-[140px] bg-white px-3 py-2.5 transition-colors group-hover:bg-zinc-50/50 dark:bg-zinc-900 dark:group-hover:bg-zinc-800/30">
                                   <div className="font-medium">
                                     {emp.first_name} {emp.last_name}
                                   </div>
                                   <div className="text-xs text-zinc-500">
+                                    {(employeeRoleIds[emp.id] ?? [])
+                                      .map((rid) => roles.find((r) => r.id === rid)?.name)
+                                      .filter(Boolean)
+                                      .join(", ") || "—"}
+                                  </div>
+                                  <div className="text-xs text-zinc-400">
                                     {empHours}h
                                   </div>
                                 </td>
@@ -749,17 +771,15 @@ export function SchedulerClient({
                                     return (
                                       <td
                                         key={`${emp.id}-${day}-${period.id}`}
-                                        className="min-w-[80px] border-l border-zinc-100 p-1 align-top dark:border-zinc-800"
+                                        className="min-w-[90px] border-l border-zinc-200 p-1.5 align-top dark:border-zinc-700"
                                       >
                                         {shift ? (
-                                          <div className="group flex items-center justify-between gap-1 rounded bg-[hsl(var(--primary))]/15 px-2 py-1 text-xs">
-                                            <span className="truncate">
-                                              {shift.location_name} ·{" "}
-                                              {shift.role_name}
+                                          <div className="flex flex-col gap-0.5 rounded-lg border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-2 py-1.5 text-xs">
+                                            <span className="truncate font-medium">
+                                              {shift.location_name} · {shift.role_name}
                                             </span>
-                                            <span className="text-zinc-500">
-                                              {shift.start_time.slice(0, 5)}-
-                                              {shift.end_time.slice(0, 5)}
+                                            <span className="text-[10px] text-zinc-600 dark:text-zinc-400">
+                                              {shift.start_time.slice(0, 5)}–{shift.end_time.slice(0, 5)}
                                             </span>
                                           </div>
                                         ) : null}
@@ -801,11 +821,17 @@ export function SchedulerClient({
                             ...emps.map((emp) => (
                               <tr
                                 key={`${roleId}-${emp.id}`}
-                                className="border-b border-zinc-100 dark:border-zinc-800"
+                                className="group border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
                               >
-                                <td className="sticky left-0 z-10 bg-white pl-6 p-2 dark:bg-zinc-900">
+                                <td className="sticky left-0 z-10 min-w-[140px] bg-white pl-6 pr-3 py-2.5 transition-colors group-hover:bg-zinc-50/50 dark:bg-zinc-900 dark:group-hover:bg-zinc-800/30">
                                   <div className="font-medium">
                                     {emp.first_name} {emp.last_name}
+                                  </div>
+                                  <div className="text-xs text-zinc-500">
+                                    {(employeeRoleIds[emp.id] ?? [])
+                                      .map((rid) => roles.find((r) => r.id === rid)?.name)
+                                      .filter(Boolean)
+                                      .join(", ") || "—"}
                                   </div>
                                 </td>
                                 {Array.from({ length: 7 }, (_, day) =>
@@ -817,16 +843,13 @@ export function SchedulerClient({
                                     return (
                                       <td
                                         key={`${emp.id}-${day}-${period.id}`}
-                                        className="min-w-[80px] border-l border-zinc-100 p-1 align-top dark:border-zinc-800"
+                                        className="min-w-[90px] border-l border-zinc-200 p-1.5 align-top dark:border-zinc-700"
                                       >
                                         {shift ? (
-                                          <div className="group flex items-center justify-between gap-1 rounded bg-[hsl(var(--primary))]/15 px-2 py-1 text-xs">
-                                            <span className="truncate">
-                                              {shift.location_name}
-                                            </span>
-                                            <span className="text-zinc-500">
-                                              {shift.start_time.slice(0, 5)}-
-                                              {shift.end_time.slice(0, 5)}
+                                          <div className="flex flex-col gap-0.5 rounded-lg border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-2 py-1.5 text-xs">
+                                            <span className="truncate font-medium">{shift.location_name}</span>
+                                            <span className="text-[10px] text-zinc-600 dark:text-zinc-400">
+                                              {shift.start_time.slice(0, 5)}–{shift.end_time.slice(0, 5)}
                                             </span>
                                           </div>
                                         ) : null}
@@ -851,7 +874,7 @@ export function SchedulerClient({
                   Vista sola lettura. Passa a &quot;Per sede&quot; per assegnare.
                 </p>
               )}
-              <EmployeeSidebar employees={filteredEmployees} shifts={shifts} weekStart={weekStart} />
+              <EmployeeSidebar employees={filteredEmployees} shifts={shifts} weekStart={weekStart} roles={roles} employeeRoleIds={employeeRoleIds} />
             </div>
 
             <DragOverlay>
@@ -951,14 +974,15 @@ const ShiftCell = memo(function ShiftCell({
     id: `cell:${locationId}:${roleId}:${day}:${period}`,
   });
 
+  const isUncovered = required > 0 && assigned < required;
   return (
     <td
       ref={setNodeRef}
-      className={`min-w-[80px] border-l border-zinc-100 p-1 align-top dark:border-zinc-800 ${
+      className={`min-w-[90px] border-l border-zinc-200 p-1.5 align-top dark:border-zinc-700 ${
         isOver ? "bg-[hsl(var(--primary))]/20" : ""
-      } ${required > 0 && assigned < required ? "bg-amber-50/50 dark:bg-amber-900/10" : ""}`}
+      } ${isUncovered ? "bg-amber-50 dark:bg-amber-900/15" : ""}`}
     >
-      <div className="min-h-[44px] space-y-1">
+      <div className="min-h-[48px] space-y-1">
         {shifts.map((s) => (
           <ShiftCard
             key={s.id}
@@ -971,7 +995,14 @@ const ShiftCell = memo(function ShiftCell({
           />
         ))}
         {required > 0 && (
-          <div className="text-[10px] text-zinc-400">
+          <div
+            className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${
+              isUncovered
+                ? "bg-amber-200/80 text-amber-900 dark:bg-amber-800/50 dark:text-amber-200"
+                : "bg-zinc-200/80 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-400"
+            }`}
+            title={`${assigned} assegnati su ${required} richiesti`}
+          >
             {assigned}/{required}
           </div>
         )}
