@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo } from "react";
 
 type Role = { id: string; name: string };
 type Location = { id: string; name: string };
@@ -11,7 +11,7 @@ export type SchedulerFiltersState = {
   onlyUncovered: boolean;
 };
 
-export function SchedulerFilters({
+export const SchedulerFilters = memo(function SchedulerFilters({
   roles,
   locations,
   filters,
@@ -100,4 +100,4 @@ export function SchedulerFilters({
       )}
     </div>
   );
-}
+});

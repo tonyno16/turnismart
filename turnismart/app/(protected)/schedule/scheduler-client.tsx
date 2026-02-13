@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition, useMemo, useCallback, memo, useRef, useEffect } from "react";
+import dynamic from "next/dynamic";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -15,18 +17,44 @@ import { format, addWeeks, addDays, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { toast } from "sonner";
 import { createShift, deleteShift, publishSchedule, updateShift, updateShiftNotes, duplicateShift } from "@/app/actions/shifts";
-import { ReplicateWeekModal } from "@/components/schedule/replicate-week-modal";
-import { SaveTemplateModal } from "@/components/schedule/save-template-modal";
-import { ApplyTemplateModal } from "@/components/schedule/apply-template-modal";
-import { ExportPdfModal } from "@/components/schedule/export-pdf-modal";
 import { EmployeeSidebar } from "@/components/schedule/employee-sidebar";
 import { SchedulerFilters, type SchedulerFiltersState } from "@/components/schedule/scheduler-filters";
-import { ConflictPopup } from "@/components/schedule/conflict-popup";
-import { AIGenerationModal } from "@/components/schedule/ai-generation-modal";
-import { SickLeavePopup } from "@/components/schedule/sick-leave-popup";
+
+const ReplicateWeekModal = dynamic(
+  () => import("@/components/schedule/replicate-week-modal").then((m) => ({ default: m.ReplicateWeekModal })),
+  { ssr: false }
+);
+const SaveTemplateModal = dynamic(
+  () => import("@/components/schedule/save-template-modal").then((m) => ({ default: m.SaveTemplateModal })),
+  { ssr: false }
+);
+const ApplyTemplateModal = dynamic(
+  () => import("@/components/schedule/apply-template-modal").then((m) => ({ default: m.ApplyTemplateModal })),
+  { ssr: false }
+);
+const ConflictPopup = dynamic(
+  () => import("@/components/schedule/conflict-popup").then((m) => ({ default: m.ConflictPopup })),
+  { ssr: false }
+);
+const SickLeavePopup = dynamic(
+  () => import("@/components/schedule/sick-leave-popup").then((m) => ({ default: m.SickLeavePopup })),
+  { ssr: false }
+);
 import { ShiftCard } from "@/components/schedule/shift-card";
 
+const ExportPdfModal = dynamic(
+  () => import("@/components/schedule/export-pdf-modal").then((m) => ({ default: m.ExportPdfModal })),
+  { ssr: false }
+);
+
+const AIGenerationModal = dynamic(
+  () => import("@/components/schedule/ai-generation-modal").then((m) => ({ default: m.AIGenerationModal })),
+  { ssr: false }
+);
+
 const DAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+const VIRTUALIZATION_THRESHOLD = 20;
+const ROW_HEIGHT_ESTIMATE = 52;
 const PERIODS = [
   { id: "morning", label: "Mattina" },
   { id: "evening", label: "Sera" },
@@ -129,6 +157,7 @@ export function SchedulerClient({
   const [actionsOpen, setActionsOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
+  const gridScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsMounted(true);
@@ -186,13 +215,16 @@ export function SchedulerClient({
     return index;
   }, [coverage]);
 
-  const navigateWeek = (delta: number) => {
-    const d = addWeeks(parseISO(weekStart), delta);
-    const nextWeek = format(d, "yyyy-MM-dd");
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("week", nextWeek);
-    router.push(`/schedule?${params.toString()}`);
-  };
+  const navigateWeek = useCallback(
+    (delta: number) => {
+      const d = addWeeks(parseISO(weekStart), delta);
+      const nextWeek = format(d, "yyyy-MM-dd");
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("week", nextWeek);
+      router.push(`/schedule?${params.toString()}`);
+    },
+    [router, searchParams, weekStart]
+  );
 
   const handleDragStart = (event: DragStartEvent) => {
     const id = String(event.active.id);
@@ -318,6 +350,57 @@ export function SchedulerClient({
     }
     return map;
   }, [filteredEmployees, roles, employeeRoleIds]);
+
+  const roleFlatRows = useMemo(() => {
+    const flat: Array<
+      | { type: "roleHeader"; roleId: string; roleName: string }
+      | { type: "employee"; employee: Employee; roleId: string }
+    > = [];
+    for (const [roleId, emps] of employeesByRole) {
+      const role = roles.find((r) => r.id === roleId);
+      flat.push({ type: "roleHeader", roleId, roleName: role?.name ?? "" });
+      for (const emp of emps) {
+        flat.push({ type: "employee", employee: emp, roleId });
+      }
+    }
+    return flat;
+  }, [employeesByRole, roles]);
+
+  const useVirtualizationEmployee =
+    viewMode === "employee" &&
+    filteredEmployees.length > VIRTUALIZATION_THRESHOLD;
+
+  const useVirtualizationLocation =
+    viewMode === "location" &&
+    filteredLocationRoleRows.length > VIRTUALIZATION_THRESHOLD;
+
+  const useVirtualizationRole =
+    viewMode === "role" && roleFlatRows.length > VIRTUALIZATION_THRESHOLD;
+
+  const rowVirtualizerEmployee = useVirtualizer({
+    count: filteredEmployees.length,
+    getScrollElement: () => gridScrollRef.current,
+    estimateSize: () => ROW_HEIGHT_ESTIMATE,
+    overscan: 5,
+    enabled: useVirtualizationEmployee,
+  });
+
+  const rowVirtualizerLocation = useVirtualizer({
+    count: filteredLocationRoleRows.length,
+    getScrollElement: () => gridScrollRef.current,
+    estimateSize: () => ROW_HEIGHT_ESTIMATE,
+    overscan: 5,
+    enabled: useVirtualizationLocation,
+  });
+
+  const rowVirtualizerRole = useVirtualizer({
+    count: roleFlatRows.length,
+    getScrollElement: () => gridScrollRef.current,
+    estimateSize: (i) =>
+      roleFlatRows[i]?.type === "roleHeader" ? 40 : ROW_HEIGHT_ESTIMATE,
+    overscan: 5,
+    enabled: useVirtualizationRole,
+  });
 
   const handleDeleteShift = useCallback(
     (shiftId: string) => {
@@ -655,7 +738,10 @@ export function SchedulerClient({
             </div>
           ) : (
           <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div className="flex min-w-0 flex-1 overflow-auto [-webkit-overflow-scrolling:touch]">
+            <div
+              ref={gridScrollRef}
+              className="flex min-w-0 flex-1 overflow-auto [-webkit-overflow-scrolling:touch]"
+            >
               <div className="min-w-[800px]">
                 <table className="w-full border-collapse text-sm">
                   <thead>
@@ -695,6 +781,76 @@ export function SchedulerClient({
                                 : "Nessun fabbisogno configurato"}
                             </td>
                           </tr>
+                        ) : useVirtualizationLocation ? (
+                          <tr>
+                            <td colSpan={15} className="p-0">
+                              <div
+                                style={{
+                                  height: `${rowVirtualizerLocation.getTotalSize()}px`,
+                                  width: "100%",
+                                  position: "relative",
+                                }}
+                              >
+                                {rowVirtualizerLocation.getVirtualItems().map((virtualRow) => {
+                                  const {
+                                    locationId: locId,
+                                    locationName: locName,
+                                    roleId: roleIdR,
+                                    roleName: roleNameR,
+                                  } = filteredLocationRoleRows[virtualRow.index];
+                                  return (
+                                    <div
+                                      key={`${locId}-${roleIdR}`}
+                                      className="absolute left-0 flex w-full border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
+                                      style={{
+                                        top: 0,
+                                        transform: `translateY(${virtualRow.start}px)`,
+                                        height: `${virtualRow.size}px`,
+                                      }}
+                                    >
+                                      <div className="sticky left-0 z-10 min-w-[140px] shrink-0 bg-white px-3 py-2.5 dark:bg-zinc-900">
+                                        <span className="font-medium">{locName}</span>
+                                        <span className="text-zinc-500"> / {roleNameR}</span>
+                                      </div>
+                                      {Array.from({ length: 7 }, (_, day) =>
+                                        PERIODS.map((period) => {
+                                          const shiftsHere = getShiftsInCell(
+                                            locId,
+                                            roleIdR,
+                                            day,
+                                            period.id
+                                          );
+                                          const covKey = `${locId}:${roleIdR}:${day}:${period.id}`;
+                                          const cov = coverageIndex.get(covKey);
+                                          const assigned = shiftsHere.length;
+                                          const required = cov?.required ?? 0;
+                                          return (
+                                            <ShiftCell
+                                              key={`${locId}-${roleIdR}-${day}-${period.id}`}
+                                              as="div"
+                                              locationId={locId}
+                                              roleId={roleIdR}
+                                              day={day}
+                                              period={period.id}
+                                              shifts={shiftsHere}
+                                              assigned={assigned}
+                                              required={required}
+                                              weekStart={weekStart}
+                                              onDelete={handleDeleteShift}
+                                              onFindSubstitute={handleFindSubstitute}
+                                              onUpdateNotes={handleUpdateNotes}
+                                              onUpdateTimes={handleUpdateTimes}
+                                              onDuplicate={handleDuplicateShift}
+                                            />
+                                          );
+                                        })
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </td>
+                          </tr>
                         ) : (
                           filteredLocationRoleRows.map(
                             ({
@@ -705,7 +861,7 @@ export function SchedulerClient({
                             }) => (
                               <tr
                                 key={`${locId}-${roleIdR}`}
-                                className="border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
+                                className="border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30 [content-visibility:auto]"
                               >
                                 <td className="sticky left-0 z-10 bg-white px-3 py-2.5 dark:bg-zinc-900">
                                   <span className="font-medium">{locName}</span>
@@ -762,6 +918,90 @@ export function SchedulerClient({
                             Nessun dipendente per i filtri selezionati
                           </td>
                         </tr>
+                      ) : useVirtualizationEmployee ? (
+                        <tr>
+                          <td colSpan={15} className="p-0">
+                            <div
+                              style={{
+                                height: `${rowVirtualizerEmployee.getTotalSize()}px`,
+                                width: "100%",
+                                position: "relative",
+                              }}
+                            >
+                              {rowVirtualizerEmployee.getVirtualItems().map((virtualRow) => {
+                                const emp = filteredEmployees[virtualRow.index];
+                                const empHours = (
+                                  shifts
+                                    .filter(
+                                      (s) =>
+                                        s.employee_id === emp.id &&
+                                        s.status === "active"
+                                    )
+                                    .reduce((acc, s) => {
+                                      const [sh, sm] = s.start_time
+                                        .split(":")
+                                        .map(Number);
+                                      const [eh, em] = s.end_time
+                                        .split(":")
+                                        .map(Number);
+                                      return acc + (eh * 60 + em - sh * 60 - sm);
+                                    }, 0) / 60
+                                ).toFixed(1);
+                                return (
+                                  <div
+                                    key={emp.id}
+                                    className="absolute left-0 flex w-full border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
+                                    style={{
+                                      top: 0,
+                                      transform: `translateY(${virtualRow.start}px)`,
+                                      height: `${virtualRow.size}px`,
+                                    }}
+                                  >
+                                    <div className="sticky left-0 z-10 min-w-[140px] shrink-0 bg-white px-3 py-2.5 dark:bg-zinc-900">
+                                      <div className="font-medium">
+                                        {emp.first_name} {emp.last_name}
+                                      </div>
+                                      <div className="text-xs text-zinc-500">
+                                        {(employeeRoleIds[emp.id] ?? [])
+                                          .map((rid) => roles.find((r) => r.id === rid)?.name)
+                                          .filter(Boolean)
+                                          .join(", ") || "—"}
+                                      </div>
+                                      <div className="text-xs text-zinc-400">
+                                        {empHours}h
+                                      </div>
+                                    </div>
+                                    {Array.from({ length: 7 }, (_, day) =>
+                                      PERIODS.map((period) => {
+                                        const d = addDays(parseISO(weekStart), day);
+                                        const dateStr = format(d, "yyyy-MM-dd");
+                                        const key = `${emp.id}:${dateStr}:${period.id}`;
+                                        const shift = shiftsByEmployeeSlot.get(key);
+                                        return (
+                                          <div
+                                            key={`${emp.id}-${day}-${period.id}`}
+                                            className="min-w-[90px] shrink-0 border-l border-zinc-200 p-1.5 dark:border-zinc-700"
+                                          >
+                                            {shift ? (
+                                              <div className="flex flex-col gap-0.5 rounded-lg border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-2 py-1.5 text-xs">
+                                                <span className="truncate font-medium">
+                                                  {shift.location_name} · {shift.role_name}
+                                                </span>
+                                                <span className="text-[10px] text-zinc-600 dark:text-zinc-400">
+                                                  {shift.start_time.slice(0, 5)}–{shift.end_time.slice(0, 5)}
+                                                </span>
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        </tr>
                       ) : (
                         <>
                           {filteredEmployees.map((emp) => {
@@ -785,7 +1025,7 @@ export function SchedulerClient({
                             return (
                               <tr
                                 key={emp.id}
-                                className="group border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
+                                className="group border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30 [content-visibility:auto]"
                               >
                                 <td className="sticky left-0 z-10 min-w-[140px] bg-white px-3 py-2.5 transition-colors group-hover:bg-zinc-50/50 dark:bg-zinc-900 dark:group-hover:bg-zinc-800/30">
                                   <div className="font-medium">
@@ -842,66 +1082,147 @@ export function SchedulerClient({
                             Nessun dipendente con mansioni assegnate
                           </td>
                         </tr>
+                      ) : useVirtualizationRole ? (
+                        <tr>
+                          <td colSpan={15} className="p-0">
+                            <div
+                              style={{
+                                height: `${rowVirtualizerRole.getTotalSize()}px`,
+                                width: "100%",
+                                position: "relative",
+                              }}
+                            >
+                              {rowVirtualizerRole.getVirtualItems().map((virtualRow) => {
+                                const row = roleFlatRows[virtualRow.index];
+                                if (row.type === "roleHeader") {
+                                  return (
+                                    <div
+                                      key={`role-${row.roleId}`}
+                                      className="absolute left-0 flex w-full border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/50"
+                                      style={{
+                                        top: 0,
+                                        transform: `translateY(${virtualRow.start}px)`,
+                                        height: `${virtualRow.size}px`,
+                                      }}
+                                    >
+                                      <div className="sticky left-0 flex min-w-full items-center p-2 font-semibold text-zinc-700 dark:text-zinc-300">
+                                        {row.roleName}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                const { employee: emp } = row;
+                                return (
+                                  <div
+                                    key={`${row.roleId}-${emp.id}`}
+                                    className="absolute left-0 flex w-full border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
+                                    style={{
+                                      top: 0,
+                                      transform: `translateY(${virtualRow.start}px)`,
+                                      height: `${virtualRow.size}px`,
+                                    }}
+                                  >
+                                    <div className="sticky left-0 z-10 min-w-[140px] shrink-0 bg-white pl-6 pr-3 py-2.5 dark:bg-zinc-900">
+                                      <div className="font-medium">
+                                        {emp.first_name} {emp.last_name}
+                                      </div>
+                                      <div className="text-xs text-zinc-500">
+                                        {(employeeRoleIds[emp.id] ?? [])
+                                          .map((rid) => roles.find((r) => r.id === rid)?.name)
+                                          .filter(Boolean)
+                                          .join(", ") || "—"}
+                                      </div>
+                                    </div>
+                                    {Array.from({ length: 7 }, (_, day) =>
+                                      PERIODS.map((period) => {
+                                        const d = addDays(parseISO(weekStart), day);
+                                        const dateStr = format(d, "yyyy-MM-dd");
+                                        const key = `${emp.id}:${dateStr}:${period.id}`;
+                                        const shift = shiftsByEmployeeSlot.get(key);
+                                        return (
+                                          <div
+                                            key={`${emp.id}-${day}-${period.id}`}
+                                            className="min-w-[90px] shrink-0 border-l border-zinc-200 p-1.5 dark:border-zinc-700"
+                                          >
+                                            {shift ? (
+                                              <div className="flex flex-col gap-0.5 rounded-lg border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-2 py-1.5 text-xs">
+                                                <span className="truncate font-medium">{shift.location_name}</span>
+                                                <span className="text-[10px] text-zinc-600 dark:text-zinc-400">
+                                                  {shift.start_time.slice(0, 5)}–{shift.end_time.slice(0, 5)}
+                                                </span>
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        </tr>
                       ) : (
                         Array.from(employeesByRole.entries()).flatMap(
-                        ([roleId, emps]) => {
-                          const role = roles.find((r) => r.id === roleId);
-                          return [
-                            <tr
-                              key={`role-${roleId}`}
-                              className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/50"
-                            >
-                              <td
-                                colSpan={15}
-                                className="sticky left-0 p-2 font-semibold text-zinc-700 dark:text-zinc-300"
-                              >
-                                {role?.name ?? ""}
-                              </td>
-                            </tr>,
-                            ...emps.map((emp) => (
+                          ([roleId, emps]) => {
+                            const role = roles.find((r) => r.id === roleId);
+                            return [
                               <tr
-                                key={`${roleId}-${emp.id}`}
-                                className="group border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30"
+                                key={`role-${roleId}`}
+                                className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/50 [content-visibility:auto]"
                               >
-                                <td className="sticky left-0 z-10 min-w-[140px] bg-white pl-6 pr-3 py-2.5 transition-colors group-hover:bg-zinc-50/50 dark:bg-zinc-900 dark:group-hover:bg-zinc-800/30">
-                                  <div className="font-medium">
-                                    {emp.first_name} {emp.last_name}
-                                  </div>
-                                  <div className="text-xs text-zinc-500">
-                                    {(employeeRoleIds[emp.id] ?? [])
-                                      .map((rid) => roles.find((r) => r.id === rid)?.name)
-                                      .filter(Boolean)
-                                      .join(", ") || "—"}
-                                  </div>
+                                <td
+                                  colSpan={15}
+                                  className="sticky left-0 p-2 font-semibold text-zinc-700 dark:text-zinc-300"
+                                >
+                                  {role?.name ?? ""}
                                 </td>
-                                {Array.from({ length: 7 }, (_, day) =>
-                                  PERIODS.map((period) => {
-                                    const d = addDays(parseISO(weekStart), day);
-                                    const dateStr = format(d, "yyyy-MM-dd");
-                                    const key = `${emp.id}:${dateStr}:${period.id}`;
-                                    const shift = shiftsByEmployeeSlot.get(key);
-                                    return (
-                                      <td
-                                        key={`${emp.id}-${day}-${period.id}`}
-                                        className="min-w-[90px] border-l border-zinc-200 p-1.5 align-top dark:border-zinc-700"
-                                      >
-                                        {shift ? (
-                                          <div className="flex flex-col gap-0.5 rounded-lg border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-2 py-1.5 text-xs">
-                                            <span className="truncate font-medium">{shift.location_name}</span>
-                                            <span className="text-[10px] text-zinc-600 dark:text-zinc-400">
-                                              {shift.start_time.slice(0, 5)}–{shift.end_time.slice(0, 5)}
-                                            </span>
-                                          </div>
-                                        ) : null}
-                                      </td>
-                                    );
-                                  })
-                                )}
-                              </tr>
-                            )),
-                          ];
-                        }
-                      ))
+                              </tr>,
+                              ...emps.map((emp) => (
+                                <tr
+                                  key={`${roleId}-${emp.id}`}
+                                  className="group border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30 [content-visibility:auto]"
+                                >
+                                  <td className="sticky left-0 z-10 min-w-[140px] bg-white pl-6 pr-3 py-2.5 transition-colors group-hover:bg-zinc-50/50 dark:bg-zinc-900 dark:group-hover:bg-zinc-800/30">
+                                    <div className="font-medium">
+                                      {emp.first_name} {emp.last_name}
+                                    </div>
+                                    <div className="text-xs text-zinc-500">
+                                      {(employeeRoleIds[emp.id] ?? [])
+                                        .map((rid) => roles.find((r) => r.id === rid)?.name)
+                                        .filter(Boolean)
+                                        .join(", ") || "—"}
+                                    </div>
+                                  </td>
+                                  {Array.from({ length: 7 }, (_, day) =>
+                                    PERIODS.map((period) => {
+                                      const d = addDays(parseISO(weekStart), day);
+                                      const dateStr = format(d, "yyyy-MM-dd");
+                                      const key = `${emp.id}:${dateStr}:${period.id}`;
+                                      const shift = shiftsByEmployeeSlot.get(key);
+                                      return (
+                                        <td
+                                          key={`${emp.id}-${day}-${period.id}`}
+                                          className="min-w-[90px] border-l border-zinc-200 p-1.5 align-top dark:border-zinc-700"
+                                        >
+                                          {shift ? (
+                                            <div className="flex flex-col gap-0.5 rounded-lg border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-2 py-1.5 text-xs">
+                                              <span className="truncate font-medium">{shift.location_name}</span>
+                                              <span className="text-[10px] text-zinc-600 dark:text-zinc-400">
+                                                {shift.start_time.slice(0, 5)}–{shift.end_time.slice(0, 5)}
+                                              </span>
+                                            </div>
+                                          ) : null}
+                                        </td>
+                                      );
+                                    })
+                                  )}
+                                </tr>
+                              )),
+                            ];
+                          }
+                        )
+                      )
                     )}
                   </tbody>
                 </table>
@@ -1014,6 +1335,7 @@ const ShiftCell = memo(function ShiftCell({
   onUpdateNotes,
   onUpdateTimes,
   onDuplicate,
+  as: Wrapper = "td",
 }: {
   locationId: string;
   roleId: string;
@@ -1028,19 +1350,20 @@ const ShiftCell = memo(function ShiftCell({
   onUpdateNotes: (id: string, notes: string | null) => void;
   onUpdateTimes?: (shiftId: string, startTime: string, endTime: string) => void;
   onDuplicate: (shiftId: string, targetDate: string) => void;
+  as?: "td" | "div";
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `cell:${locationId}:${roleId}:${day}:${period}`,
   });
 
   const isUncovered = required > 0 && assigned < required;
+  const className = `min-w-[90px] border-l border-zinc-200 p-1.5 dark:border-zinc-700 contain-[layout] ${
+    Wrapper === "td" ? "align-top " : ""
+  }${isOver ? "bg-[hsl(var(--primary))]/20" : ""} ${
+    isUncovered ? "bg-amber-50 dark:bg-amber-900/15" : ""
+  }`;
   return (
-    <td
-      ref={setNodeRef}
-      className={`min-w-[90px] border-l border-zinc-200 p-1.5 align-top dark:border-zinc-700 ${
-        isOver ? "bg-[hsl(var(--primary))]/20" : ""
-      } ${isUncovered ? "bg-amber-50 dark:bg-amber-900/15" : ""}`}
-    >
+    <Wrapper ref={setNodeRef} className={className}>
       <div className="min-h-[48px] space-y-1">
         {shifts.map((s) => (
           <ShiftCard
@@ -1067,6 +1390,6 @@ const ShiftCell = memo(function ShiftCell({
           </div>
         )}
       </div>
-    </td>
+    </Wrapper>
   );
 });

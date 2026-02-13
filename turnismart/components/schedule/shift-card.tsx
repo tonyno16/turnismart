@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import { format, addDays, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { FileText, Copy, Clock } from "lucide-react";
@@ -17,7 +17,7 @@ type ShiftForCard = {
   role_name: string;
 };
 
-export function ShiftCard({
+export const ShiftCard = memo(function ShiftCard({
   shift,
   weekStart,
   onDelete,
@@ -274,4 +274,4 @@ export function ShiftCard({
       </div>
     </div>
   );
-}
+});

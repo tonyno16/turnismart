@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { getAdminKpis, getRecentOrganizations, getAdminAlerts } from "@/lib/admin";
+
+export const dynamic = "force-dynamic";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
 import { Building2, Users, AlertTriangle, Calendar } from "lucide-react";

@@ -93,11 +93,18 @@ export async function getCurrentUser() {
 
   if (!authUser) return null;
 
-  let [appUser] = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, authUser.id))
-    .limit(1);
+  let appUser: typeof users.$inferSelect | undefined;
+  try {
+    [appUser] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, authUser.id))
+      .limit(1);
+  } catch (e) {
+    const cause = e && typeof e === "object" && "cause" in e ? (e as { cause?: unknown }).cause : e;
+    console.error("[Auth] Query users failed. Cause:", cause);
+    throw e;
+  }
 
   if (!appUser) {
     // Provision on first access: auth user exists but no app record (OAuth, legacy, etc.)

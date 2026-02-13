@@ -1,4 +1,4 @@
-import { desc, eq, and, gte, sql, isNotNull, isNull } from "drizzle-orm";
+import { desc, eq, and, gte, sql, isNotNull, isNull, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   organizations,
@@ -18,43 +18,39 @@ export type AdminKpis = {
 
 export async function getAdminKpis(): Promise<AdminKpis> {
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-  const [orgCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(organizations);
-
-  const [userCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(users);
-
-  const [recentSignups] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(users)
-    .where(gte(users.created_at, weekAgo));
-
-  const orgsList = await db
-    .select({
-      id: organizations.id,
-      trial_ends_at: organizations.trial_ends_at,
-      stripe_customer_id: organizations.stripe_customer_id,
-    })
-    .from(organizations);
-
   const now = new Date();
-  let trialOrgs = 0;
-  let paidOrgs = 0;
-  for (const o of orgsList) {
-    if (o.stripe_customer_id) paidOrgs++;
-    else if (o.trial_ends_at && new Date(o.trial_ends_at) > now) trialOrgs++;
-  }
+
+  const [orgCount, userCount, recentSignups, paidOrgsRow, trialOrgsRow] =
+    await Promise.all([
+      db.select({ count: sql<number>`count(*)::int` }).from(organizations),
+      db.select({ count: sql<number>`count(*)::int` }).from(users),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(users)
+        .where(gte(users.created_at, weekAgo)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(organizations)
+        .where(isNotNull(organizations.stripe_customer_id)),
+      db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(organizations)
+        .where(
+          and(
+            isNull(organizations.stripe_customer_id),
+            isNotNull(organizations.trial_ends_at),
+            gte(organizations.trial_ends_at, now)
+          )
+        ),
+    ]);
 
   return {
-    totalOrganizations: orgCount?.count ?? 0,
-    totalUsers: userCount?.count ?? 0,
-    activeOrganizations: orgCount?.count ?? 0,
-    trialOrgs,
-    paidOrgs,
-    recentSignups: recentSignups?.count ?? 0,
+    totalOrganizations: orgCount[0]?.count ?? 0,
+    totalUsers: userCount[0]?.count ?? 0,
+    activeOrganizations: orgCount[0]?.count ?? 0,
+    trialOrgs: trialOrgsRow[0]?.count ?? 0,
+    paidOrgs: paidOrgsRow[0]?.count ?? 0,
+    recentSignups: recentSignups[0]?.count ?? 0,
   };
 }
 
@@ -77,30 +73,47 @@ export async function getRecentOrganizations(limit = 10): Promise<RecentOrg[]> {
     .orderBy(desc(organizations.created_at))
     .limit(limit);
 
-  const result: RecentOrg[] = [];
-  for (const o of orgs) {
-    const [uc] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(users)
-      .where(eq(users.organization_id, o.id));
-    const [lc] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(locations)
-      .where(eq(locations.organization_id, o.id));
+  if (orgs.length === 0) return [];
 
-    result.push({
-      id: o.id,
-      name: o.name,
-      sector: o.sector,
-      onboarding_completed: o.onboarding_completed,
-      trial_ends_at: o.trial_ends_at,
-      stripe_customer_id: o.stripe_customer_id,
-      created_at: o.created_at,
-      userCount: uc?.count ?? 0,
-      locationCount: lc?.count ?? 0,
-    });
-  }
-  return result;
+  const orgIds = orgs.map((o) => o.id);
+
+  const [userCounts, locationCounts] = await Promise.all([
+    db
+      .select({
+        organization_id: users.organization_id,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(users)
+      .where(inArray(users.organization_id, orgIds))
+      .groupBy(users.organization_id),
+    db
+      .select({
+        organization_id: locations.organization_id,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(locations)
+      .where(inArray(locations.organization_id, orgIds))
+      .groupBy(locations.organization_id),
+  ]);
+
+  const ucMap = new Map(
+    userCounts.map((r) => [r.organization_id!, r.count])
+  );
+  const lcMap = new Map(
+    locationCounts.map((r) => [r.organization_id!, r.count])
+  );
+
+  return orgs.map((o) => ({
+    id: o.id,
+    name: o.name,
+    sector: o.sector,
+    onboarding_completed: o.onboarding_completed,
+    trial_ends_at: o.trial_ends_at,
+    stripe_customer_id: o.stripe_customer_id,
+    created_at: o.created_at,
+    userCount: ucMap.get(o.id) ?? 0,
+    locationCount: lcMap.get(o.id) ?? 0,
+  }));
 }
 
 export type AdminAlert = {
@@ -158,33 +171,79 @@ export async function getOrganizationsForAdmin(filters?: {
   hasStripe?: boolean;
   onboardingComplete?: boolean;
 }): Promise<OrgWithStats[]> {
-  let query = db.select().from(organizations).orderBy(desc(organizations.created_at));
+  const whereConditions: Parameters<typeof and>[0][] = [];
+  if (filters?.hasStripe !== undefined) {
+    whereConditions.push(
+      filters.hasStripe
+        ? isNotNull(organizations.stripe_customer_id)
+        : isNull(organizations.stripe_customer_id)
+    );
+  }
+  if (filters?.onboardingComplete !== undefined) {
+    whereConditions.push(
+      eq(organizations.onboarding_completed, filters.onboardingComplete)
+    );
+  }
 
-  const orgs = await query.limit(100);
+  const baseQuery = db
+    .select()
+    .from(organizations)
+    .orderBy(desc(organizations.created_at));
 
-  const result: OrgWithStats[] = [];
-  for (const o of orgs) {
-    if (filters?.search) {
-      const search = filters.search.toLowerCase();
-      if (!o.name.toLowerCase().includes(search) && !(o.sector ?? "").toLowerCase().includes(search)) continue;
-    }
-    if (filters?.hasStripe !== undefined && (!!o.stripe_customer_id) !== filters.hasStripe) continue;
-    if (filters?.onboardingComplete !== undefined && o.onboarding_completed !== filters.onboardingComplete) continue;
+  const orgs = await (whereConditions.length > 0
+    ? baseQuery.where(and(...whereConditions)).limit(100)
+    : baseQuery.limit(100));
+  if (orgs.length === 0) return [];
 
-    const [uc] = await db
-      .select({ count: sql<number>`count(*)::int` })
+  const orgIds = orgs.map((o) => o.id);
+
+  const [userCounts, locationCounts, employeeCounts] = await Promise.all([
+    db
+      .select({
+        organization_id: users.organization_id,
+        count: sql<number>`count(*)::int`,
+      })
       .from(users)
-      .where(eq(users.organization_id, o.id));
-    const [lc] = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .where(inArray(users.organization_id, orgIds))
+      .groupBy(users.organization_id),
+    db
+      .select({
+        organization_id: locations.organization_id,
+        count: sql<number>`count(*)::int`,
+      })
       .from(locations)
-      .where(eq(locations.organization_id, o.id));
-    const [ec] = await db
-      .select({ count: sql<number>`count(*)::int` })
+      .where(inArray(locations.organization_id, orgIds))
+      .groupBy(locations.organization_id),
+    db
+      .select({
+        organization_id: employees.organization_id,
+        count: sql<number>`count(*)::int`,
+      })
       .from(employees)
-      .where(eq(employees.organization_id, o.id));
+      .where(inArray(employees.organization_id, orgIds))
+      .groupBy(employees.organization_id),
+  ]);
 
-    result.push({
+  const ucMap = new Map(userCounts.map((r) => [r.organization_id!, r.count]));
+  const lcMap = new Map(
+    locationCounts.map((r) => [r.organization_id!, r.count])
+  );
+  const ecMap = new Map(
+    employeeCounts.map((r) => [r.organization_id!, r.count])
+  );
+
+  const search = filters?.search?.toLowerCase();
+  return orgs
+    .filter((o) => {
+      if (search) {
+        const match =
+          o.name.toLowerCase().includes(search) ||
+          (o.sector ?? "").toLowerCase().includes(search);
+        if (!match) return false;
+      }
+      return true;
+    })
+    .map((o) => ({
       id: o.id,
       name: o.name,
       sector: o.sector,
@@ -192,10 +251,8 @@ export async function getOrganizationsForAdmin(filters?: {
       trial_ends_at: o.trial_ends_at,
       stripe_customer_id: o.stripe_customer_id,
       created_at: o.created_at,
-      userCount: uc?.count ?? 0,
-      locationCount: lc?.count ?? 0,
-      employeeCount: ec?.count ?? 0,
-    });
-  }
-  return result;
+      userCount: ucMap.get(o.id) ?? 0,
+      locationCount: lcMap.get(o.id) ?? 0,
+      employeeCount: ecMap.get(o.id) ?? 0,
+    }));
 }
