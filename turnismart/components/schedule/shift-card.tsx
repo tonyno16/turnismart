@@ -65,12 +65,13 @@ export function ShiftCard({
     format(addDays(parseISO(weekStart), i), "yyyy-MM-dd")
   );
 
+  const timeStr = `${shift.start_time.slice(0, 5)}–${shift.end_time.slice(0, 5)}`;
   return (
     <div
       ref={cardRef}
-      className="group relative flex items-center justify-between gap-1 rounded bg-[hsl(var(--primary))]/15 px-2 py-1 text-xs"
+      className="group relative flex flex-col gap-0.5 rounded-lg border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-2 py-1.5 pr-7 text-xs"
     >
-      <div className="min-w-0 flex-1 truncate">
+      <div className="min-w-0 flex-1 truncate font-medium">
         <span className="truncate">{shift.employee_name}</span>
         {shift.notes && (
           <span className="ml-1 text-[10px] text-zinc-500" title={shift.notes}>
@@ -78,7 +79,10 @@ export function ShiftCard({
           </span>
         )}
       </div>
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100">
+      <div className="text-[10px] font-medium text-zinc-600 dark:text-zinc-400" title={`${timeStr}`}>
+        {timeStr}
+      </div>
+      <div className="absolute right-1 top-1 flex items-center gap-0.5 rounded bg-white/90 opacity-0 shadow-sm group-hover:opacity-100 dark:bg-zinc-800/90">
         <div className="relative">
           <button
             type="button"
