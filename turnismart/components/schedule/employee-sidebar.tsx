@@ -2,6 +2,7 @@
 
 import { memo, useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
+import { shiftMinutesInWeek } from "@/lib/schedule-utils";
 
 type Employee = { id: string; first_name: string; last_name: string; weekly_hours: number };
 type Role = { id: string; name: string };
@@ -12,11 +13,6 @@ type Shift = {
   date: string;
   status?: string;
 };
-
-function parseTimeMinutes(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-}
 
 type EquityBadge = "ok" | "low" | "high" | null;
 
@@ -129,12 +125,12 @@ export const EmployeeSidebar = memo(function EmployeeSidebar({
     const map = new Map<string, number>();
     for (const s of shifts) {
       if (s.employee_id && s.status === "active") {
-        const mins = parseTimeMinutes(s.end_time) - parseTimeMinutes(s.start_time);
+        const mins = shiftMinutesInWeek(s.date, s.start_time, s.end_time, weekStart);
         map.set(s.employee_id, (map.get(s.employee_id) ?? 0) + mins);
       }
     }
     return map;
-  }, [shifts]);
+  }, [shifts, weekStart]);
 
   const { empShiftCounts, equityByEmp } = useMemo(() => {
     const counts = new Map<string, number>();

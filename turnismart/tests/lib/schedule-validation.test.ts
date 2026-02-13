@@ -33,9 +33,13 @@ vi.mock("@/drizzle/schema", () => ({
   employeeTimeOff: { employee_id: "employee_id", status: "status", start_date: "start_date", end_date: "end_date" },
 }));
 vi.mock("@/drizzle/schema/employee-availability", () => ({}));
-vi.mock("@/lib/schedules", () => ({
-  getEmployeeWeekShifts: mockGetEmployeeWeekShifts,
-}));
+vi.mock("@/lib/schedules", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/schedules")>("@/lib/schedules");
+  return {
+    ...actual,
+    getEmployeeWeekShifts: mockGetEmployeeWeekShifts,
+  };
+});
 
 import {
   checkOverlap,
@@ -114,6 +118,28 @@ describe("checkMaxWeeklyHours", () => {
 
     const result = await checkMaxWeeklyHours(
       "emp1", "2025-01-06", "2025-01-07", "08:00", "14:00"
+    );
+    expect(result).toBeNull();
+  });
+
+  it("counts only hours within week for night shifts (Sun 22:00 → Mon 06:00)", async () => {
+    mockDb.select.mockReturnValueOnce(
+      chainableMock([{ max_weekly_hours: 40 }])
+    );
+    // Week 2025-01-06 (Mon) - 2025-01-12 (Sun). 6 shifts x 6h = 36h in the week
+    mockGetEmployeeWeekShifts.mockResolvedValueOnce([
+      { id: "s1", start_time: "08:00", end_time: "14:00", date: "2025-01-06" },
+      { id: "s2", start_time: "08:00", end_time: "14:00", date: "2025-01-07" },
+      { id: "s3", start_time: "08:00", end_time: "14:00", date: "2025-01-08" },
+      { id: "s4", start_time: "08:00", end_time: "14:00", date: "2025-01-09" },
+      { id: "s5", start_time: "08:00", end_time: "14:00", date: "2025-01-10" },
+      { id: "s6", start_time: "08:00", end_time: "14:00", date: "2025-01-11" },
+    ]);
+
+    // Sun 22:00 - Mon 06:00: only 2h (22:00-24:00) count in this week; 6h are in next week
+    // 36 + 2 = 38h <= 40h → no conflict
+    const result = await checkMaxWeeklyHours(
+      "emp1", "2025-01-06", "2025-01-12", "22:00", "06:00"
     );
     expect(result).toBeNull();
   });
@@ -228,12 +254,29 @@ describe("validateShiftAssignment", () => {
       scheduleId: "sch1",
       locationId: "loc1",
       roleId: "role1",
-      date: "2025-01-06",
+      date: "2030-01-06",
       startTime: "08:00",
       endTime: "14:00",
-      weekStart: "2025-01-06",
+      weekStart: "2030-01-06",
     });
     expect(result).toBeNull();
+  });
+
+  it("returns past_date when date is in the past", async () => {
+    const result = await validateShiftAssignment({
+      employeeId: "emp1",
+      organizationId: "org1",
+      scheduleId: "sch1",
+      locationId: "loc1",
+      roleId: "role1",
+      date: "2020-01-01",
+      startTime: "08:00",
+      endTime: "14:00",
+      weekStart: "2020-01-06",
+    });
+    expect(result).not.toBeNull();
+    expect(result!.type).toBe("past_date");
+    expect(result!.message).toContain("giorni passati");
   });
 
   it("short-circuits on first batch failure", async () => {
@@ -253,10 +296,10 @@ describe("validateShiftAssignment", () => {
       scheduleId: "sch1",
       locationId: "loc1",
       roleId: "role1",
-      date: "2025-01-06",
+      date: "2030-01-06",
       startTime: "10:00",
       endTime: "16:00",
-      weekStart: "2025-01-06",
+      weekStart: "2030-01-06",
     });
     expect(result).not.toBeNull();
     expect(result!.type).toBe("overlap");

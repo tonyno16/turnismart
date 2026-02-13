@@ -16,7 +16,7 @@ import {
 import { format, addWeeks, addDays, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { toast } from "sonner";
-import { createShift, deleteShift, publishSchedule, updateShift, updateShiftNotes, duplicateShift } from "@/app/actions/shifts";
+import { createShift, deleteShift, deleteAllShifts, publishSchedule, updateShift, updateShiftNotes, duplicateShift } from "@/app/actions/shifts";
 import { EmployeeSidebar } from "@/components/schedule/employee-sidebar";
 import { SchedulerFilters, type SchedulerFiltersState } from "@/components/schedule/scheduler-filters";
 
@@ -53,7 +53,7 @@ const AIGenerationModal = dynamic(
 );
 
 const DAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
-const VIRTUALIZATION_THRESHOLD = 20;
+const VIRTUALIZATION_THRESHOLD = 12;
 
 /** Colori distinti per sedi - bordo e testo */
 const LOCATION_COLORS = [
@@ -361,6 +361,39 @@ export function SchedulerClient({
     return map;
   }, [filteredEmployees, roles, employeeRoleIds]);
 
+  const roleNameById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const r of roles) m.set(r.id, r.name);
+    return m;
+  }, [roles]);
+
+  const empHoursByEmployee = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const emp of filteredEmployees) {
+      const total = shifts
+        .filter((s) => s.employee_id === emp.id && s.status === "active")
+        .reduce((acc, s) => {
+          const [sh, sm] = s.start_time.split(":").map(Number);
+          const [eh, em] = s.end_time.split(":").map(Number);
+          return acc + (eh * 60 + em - sh * 60 - sm);
+        }, 0);
+      map.set(emp.id, (total / 60).toFixed(1));
+    }
+    return map;
+  }, [filteredEmployees, shifts]);
+
+  const roleNamesByEmployee = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const emp of filteredEmployees) {
+      const names = (employeeRoleIds[emp.id] ?? [])
+        .map((rid) => roleNameById.get(rid))
+        .filter(Boolean)
+        .join(", ") || "—";
+      map.set(emp.id, names);
+    }
+    return map;
+  }, [filteredEmployees, employeeRoleIds, roleNameById]);
+
   const roleFlatRows = useMemo(() => {
     const flat: Array<
       | { type: "roleHeader"; roleId: string; roleName: string }
@@ -421,6 +454,20 @@ export function SchedulerClient({
     },
     [router, startTransition]
   );
+
+  const handleDeleteAllShifts = useCallback(() => {
+    if (
+      !confirm(
+        "Sei sicuro di eliminare tutti i turni di questa settimana? Potrai rifarli da zero."
+      )
+    )
+      return;
+    startTransition(async () => {
+      await deleteAllShifts(schedule.id);
+      toast.success("Tutti i turni sono stati eliminati");
+      router.refresh();
+    });
+  }, [schedule.id, router, startTransition]);
 
   const handleFindSubstitute = useCallback(
     (s: { id: string; date: string; location_name: string; role_name: string; employee_name: string }) =>
@@ -608,6 +655,13 @@ export function SchedulerClient({
                     >
                       Genera con AI
                     </button>
+                    <button
+                      onClick={() => { handleDeleteAllShifts(); setActionsOpen(false); }}
+                      disabled={pending || stats.totalShifts === 0}
+                      className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50"
+                    >
+                      Elimina tutti i turni
+                    </button>
                   </div>
                 )}
               </div>
@@ -649,6 +703,14 @@ export function SchedulerClient({
                     <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z" />
                   </svg>
                   AI
+                </button>
+                <button
+                  onClick={handleDeleteAllShifts}
+                  disabled={pending || stats.totalShifts === 0}
+                  className="rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50"
+                  title="Elimina tutti i turni della settimana"
+                >
+                  Elimina tutti
                 </button>
               </div>
             </div>
@@ -954,23 +1016,8 @@ export function SchedulerClient({
                             >
                               {rowVirtualizerEmployee.getVirtualItems().map((virtualRow) => {
                                 const emp = filteredEmployees[virtualRow.index];
-                                const empHours = (
-                                  shifts
-                                    .filter(
-                                      (s) =>
-                                        s.employee_id === emp.id &&
-                                        s.status === "active"
-                                    )
-                                    .reduce((acc, s) => {
-                                      const [sh, sm] = s.start_time
-                                        .split(":")
-                                        .map(Number);
-                                      const [eh, em] = s.end_time
-                                        .split(":")
-                                        .map(Number);
-                                      return acc + (eh * 60 + em - sh * 60 - sm);
-                                    }, 0) / 60
-                                ).toFixed(1);
+                                const empHours = empHoursByEmployee.get(emp.id) ?? "0.0";
+                                const roleNames = roleNamesByEmployee.get(emp.id) ?? "—";
                                 return (
                                   <div
                                     key={emp.id}
@@ -985,15 +1032,8 @@ export function SchedulerClient({
                                       <div className="font-medium">
                                         {emp.first_name} {emp.last_name}
                                       </div>
-                                      <div className="text-xs text-zinc-500">
-                                        {(employeeRoleIds[emp.id] ?? [])
-                                          .map((rid) => roles.find((r) => r.id === rid)?.name)
-                                          .filter(Boolean)
-                                          .join(", ") || "—"}
-                                      </div>
-                                      <div className="text-xs text-zinc-400">
-                                        {empHours}h
-                                      </div>
+                                      <div className="text-xs text-zinc-500">{roleNames}</div>
+                                      <div className="text-xs text-zinc-400">{empHours}h</div>
                                     </div>
                                     {Array.from({ length: 7 }, (_, day) =>
                                       PERIODS.map((period) => {
@@ -1029,23 +1069,8 @@ export function SchedulerClient({
                       ) : (
                         <>
                           {filteredEmployees.map((emp) => {
-                            const empHours = (
-                              shifts
-                                .filter(
-                                  (s) =>
-                                    s.employee_id === emp.id &&
-                                    s.status === "active"
-                                )
-                                .reduce((acc, s) => {
-                                  const [sh, sm] = s.start_time
-                                    .split(":")
-                                    .map(Number);
-                                  const [eh, em] = s.end_time
-                                    .split(":")
-                                    .map(Number);
-                                  return acc + (eh * 60 + em - sh * 60 - sm);
-                                }, 0) / 60
-                            ).toFixed(1);
+                            const empHours = empHoursByEmployee.get(emp.id) ?? "0.0";
+                            const roleNames = roleNamesByEmployee.get(emp.id) ?? "—";
                             return (
                               <tr
                                 key={emp.id}
@@ -1055,15 +1080,8 @@ export function SchedulerClient({
                                   <div className="font-medium">
                                     {emp.first_name} {emp.last_name}
                                   </div>
-                                  <div className="text-xs text-zinc-500">
-                                    {(employeeRoleIds[emp.id] ?? [])
-                                      .map((rid) => roles.find((r) => r.id === rid)?.name)
-                                      .filter(Boolean)
-                                      .join(", ") || "—"}
-                                  </div>
-                                  <div className="text-xs text-zinc-400">
-                                    {empHours}h
-                                  </div>
+                                  <div className="text-xs text-zinc-500">{roleNames}</div>
+                                  <div className="text-xs text-zinc-400">{empHours}h</div>
                                 </td>
                                 {Array.from({ length: 7 }, (_, day) =>
                                   PERIODS.map((period) => {
@@ -1151,10 +1169,7 @@ export function SchedulerClient({
                                         {emp.first_name} {emp.last_name}
                                       </div>
                                       <div className="text-xs text-zinc-500">
-                                        {(employeeRoleIds[emp.id] ?? [])
-                                          .map((rid) => roles.find((r) => r.id === rid)?.name)
-                                          .filter(Boolean)
-                                          .join(", ") || "—"}
+                                        {roleNamesByEmployee.get(emp.id) ?? "—"}
                                       </div>
                                     </div>
                                     {Array.from({ length: 7 }, (_, day) =>
@@ -1212,10 +1227,7 @@ export function SchedulerClient({
                                       {emp.first_name} {emp.last_name}
                                     </div>
                                     <div className="text-xs text-zinc-500">
-                                      {(employeeRoleIds[emp.id] ?? [])
-                                        .map((rid) => roles.find((r) => r.id === rid)?.name)
-                                        .filter(Boolean)
-                                        .join(", ") || "—"}
+                                      {roleNamesByEmployee.get(emp.id) ?? "—"}
                                     </div>
                                   </td>
                                   {Array.from({ length: 7 }, (_, day) =>

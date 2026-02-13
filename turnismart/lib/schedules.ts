@@ -1,4 +1,4 @@
-import { eq, and, gte, lte } from "drizzle-orm";
+import { eq, and, gte, lte, isNull } from "drizzle-orm";
 import { format, addDays, startOfWeek, parseISO, getISODay } from "date-fns";
 import { db } from "@/lib/db";
 import {
@@ -49,6 +49,10 @@ export async function getPeriodTimesForOrganization(
 export function getDayOfWeekFromDate(dateStr: string): number {
   return getISODay(parseISO(dateStr)) - 1;
 }
+
+import { shiftMinutesInWeek } from "./schedule-utils";
+
+export { shiftMinutesInWeek } from "./schedule-utils";
 
 /** Get period times for a role (or location+role override) with fallback. Supports day-specific overrides.
  * Lookup: (loc+role+day) > (loc+role) > (role+day) > (role) > org default. */
@@ -286,16 +290,19 @@ export async function getWeekSchedule(organizationId: string, weekStart: string)
   return { schedule: sched!, shifts: shiftsList };
 }
 
-/** Get all shifts for an employee in a week (optionally scoped by schedule) */
+/** Get all shifts for an employee in a week (optionally scoped by schedule).
+ * Includes shifts starting the day before the week (e.g. Sun 22:00 → Mon 06:00). */
 export async function getEmployeeWeekShifts(
   employeeId: string,
   weekStart: string,
   scheduleId?: string
 ) {
-  const weekEnd = format(addDays(parseISO(weekStart), 6), "yyyy-MM-dd");
+  const weekStartDate = parseISO(weekStart);
+  const dayBeforeWeek = format(addDays(weekStartDate, -1), "yyyy-MM-dd");
+  const weekEnd = format(addDays(weekStartDate, 6), "yyyy-MM-dd");
   const conditions = [
     eq(shifts.employee_id, employeeId),
-    gte(shifts.date, weekStart),
+    gte(shifts.date, dayBeforeWeek),
     lte(shifts.date, weekEnd),
     eq(shifts.status, "active"),
   ];
@@ -350,26 +357,64 @@ export type CoverageSlot = {
   assigned: number;
 };
 
-/** Get staffing coverage: required vs assigned per (location, role, day, period) */
+/** Get staffing coverage: required vs assigned per (location, role, day, period).
+ * Usa override per weekStart se esiste, altrimenti modello ricorrente. */
 export async function getStaffingCoverage(
   organizationId: string,
   weekStart: string,
   scheduleId?: string
 ): Promise<CoverageSlot[]> {
-  const reqs = await db
-    .select({
-      location_id: staffingRequirements.location_id,
-      location_name: locations.name,
-      role_id: staffingRequirements.role_id,
-      role_name: roles.name,
-      day_of_week: staffingRequirements.day_of_week,
-      shift_period: staffingRequirements.shift_period,
-      required_count: staffingRequirements.required_count,
-    })
-    .from(staffingRequirements)
-    .innerJoin(locations, eq(staffingRequirements.location_id, locations.id))
-    .innerJoin(roles, eq(staffingRequirements.role_id, roles.id))
-    .where(eq(locations.organization_id, organizationId));
+  const [templateRows, overrideRows] = await Promise.all([
+    db
+      .select({
+        location_id: staffingRequirements.location_id,
+        location_name: locations.name,
+        role_id: staffingRequirements.role_id,
+        role_name: roles.name,
+        day_of_week: staffingRequirements.day_of_week,
+        shift_period: staffingRequirements.shift_period,
+        required_count: staffingRequirements.required_count,
+      })
+      .from(staffingRequirements)
+      .innerJoin(locations, eq(staffingRequirements.location_id, locations.id))
+      .innerJoin(roles, eq(staffingRequirements.role_id, roles.id))
+      .where(
+        and(
+          eq(locations.organization_id, organizationId),
+          isNull(staffingRequirements.week_start_date)
+        )
+      ),
+    db
+      .select({
+        location_id: staffingRequirements.location_id,
+        location_name: locations.name,
+        role_id: staffingRequirements.role_id,
+        role_name: roles.name,
+        day_of_week: staffingRequirements.day_of_week,
+        shift_period: staffingRequirements.shift_period,
+        required_count: staffingRequirements.required_count,
+      })
+      .from(staffingRequirements)
+      .innerJoin(locations, eq(staffingRequirements.location_id, locations.id))
+      .innerJoin(roles, eq(staffingRequirements.role_id, roles.id))
+      .where(
+        and(
+          eq(locations.organization_id, organizationId),
+          eq(staffingRequirements.week_start_date, weekStart)
+        )
+      ),
+  ]);
+
+  const overrideKey = (r: { location_id: string; role_id: string; day_of_week: number; shift_period: string }) =>
+    `${r.location_id}_${r.role_id}_${r.day_of_week}_${r.shift_period}`;
+  const overrideMap = new Map(overrideRows.map((r) => [overrideKey(r), r]));
+  const templateKeys = new Set(templateRows.map((t) => overrideKey(t)));
+  const mergedFromTemplate =
+    templateRows.length > 0
+      ? templateRows.map((t) => overrideMap.get(overrideKey(t)) ?? t)
+      : [];
+  const overrideOnly = overrideRows.filter((o) => !templateKeys.has(overrideKey(o)));
+  const reqs = [...mergedFromTemplate, ...overrideOnly];
 
   let schedId = scheduleId;
   if (!schedId) {
@@ -470,6 +515,7 @@ export async function getWeekStats(
 
   const shiftList = await db
     .select({
+      date: shifts.date,
       start_time: shifts.start_time,
       end_time: shifts.end_time,
       employee_id: shifts.employee_id,
@@ -479,14 +525,10 @@ export async function getWeekStats(
       and(eq(shifts.schedule_id, sched.id), eq(shifts.status, "active"))
   );
 
-  const parseTime = (t: string) => {
-    const [h, m] = t.split(":").map(Number);
-    return h * 60 + m;
-  };
   let totalMinutes = 0;
   const empIds = new Set<string>();
   for (const s of shiftList) {
-    totalMinutes += parseTime(s.end_time) - parseTime(s.start_time);
+    totalMinutes += shiftMinutesInWeek(s.date, s.start_time, s.end_time, weekStart);
     empIds.add(s.employee_id);
   }
 

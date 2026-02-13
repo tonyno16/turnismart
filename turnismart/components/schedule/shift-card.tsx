@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, memo } from "react";
+import { useState, useRef, useEffect, memo, useMemo } from "react";
 import { format, addDays, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { FileText, Copy, Clock, AlertTriangle } from "lucide-react";
@@ -86,8 +86,12 @@ export const ShiftCard = memo(function ShiftCard({
     }
   };
 
-  const weekDates = Array.from({ length: 7 }, (_, i) =>
-    format(addDays(parseISO(weekStart), i), "yyyy-MM-dd")
+  const weekDates = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, i) =>
+        format(addDays(parseISO(weekStart), i), "yyyy-MM-dd")
+      ),
+    [weekStart]
   );
 
   const timeStr = `${shift.start_time.slice(0, 5)}–${shift.end_time.slice(0, 5)}`;

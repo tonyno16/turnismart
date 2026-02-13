@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import {
@@ -115,14 +115,24 @@ export async function copyStaffingFromLocation(
   const sourceStaffing = await db
     .select()
     .from(staffingRequirements)
-    .where(eq(staffingRequirements.location_id, sourceLocationId));
+    .where(
+      and(
+        eq(staffingRequirements.location_id, sourceLocationId),
+        isNull(staffingRequirements.week_start_date)
+      )
+    );
 
   if (sourceStaffing.length === 0)
     throw new Error("La sede sorgente non ha fabbisogno da copiare");
 
   await db
     .delete(staffingRequirements)
-    .where(eq(staffingRequirements.location_id, targetLocationId));
+    .where(
+      and(
+        eq(staffingRequirements.location_id, targetLocationId),
+        isNull(staffingRequirements.week_start_date)
+      )
+    );
 
   for (const row of sourceStaffing) {
     await db.insert(staffingRequirements).values({
@@ -131,6 +141,7 @@ export async function copyStaffingFromLocation(
       day_of_week: row.day_of_week,
       shift_period: row.shift_period,
       required_count: row.required_count,
+      week_start_date: null,
     });
   }
   revalidatePath(`/locations/${targetLocationId}`);
@@ -145,7 +156,8 @@ export async function updateStaffingRequirements(
     dayOfWeek: number;
     shiftPeriod: string;
     requiredCount: number;
-  }>
+  }>,
+  weekStartDate?: string | null
 ) {
   const { organization } = await requireOrganization();
   const [loc] = await db
@@ -156,9 +168,15 @@ export async function updateStaffingRequirements(
   if (!loc || loc.organization_id !== organization.id)
     throw new Error("Sede non trovata");
 
+  const weekFilter = weekStartDate
+    ? eq(staffingRequirements.week_start_date, weekStartDate)
+    : isNull(staffingRequirements.week_start_date);
+
   await db
     .delete(staffingRequirements)
-    .where(eq(staffingRequirements.location_id, locationId));
+    .where(
+      and(eq(staffingRequirements.location_id, locationId), weekFilter)
+    );
 
   for (const u of updates) {
     if (u.requiredCount > 0) {
@@ -168,10 +186,44 @@ export async function updateStaffingRequirements(
         day_of_week: u.dayOfWeek,
         shift_period: u.shiftPeriod as (typeof SHIFT_PERIODS)[number],
         required_count: u.requiredCount,
+        week_start_date: weekStartDate ?? null,
       });
     }
   }
   revalidatePath(`/locations/${locationId}`);
+}
+
+export async function getLocationStaffingForWeek(
+  locationId: string,
+  weekStart: string
+) {
+  const { organization } = await requireOrganization();
+  const [loc] = await db
+    .select()
+    .from(locations)
+    .where(eq(locations.id, locationId))
+    .limit(1);
+  if (!loc || loc.organization_id !== organization.id)
+    throw new Error("Sede non trovata");
+  const { getLocationStaffingForWeek: fetchWeek } = await import("@/lib/locations");
+  return fetchWeek(locationId, weekStart);
+}
+
+export async function getLocationStaffingForMonth(
+  locationId: string,
+  year: number,
+  month: number
+) {
+  const { organization } = await requireOrganization();
+  const [loc] = await db
+    .select()
+    .from(locations)
+    .where(eq(locations.id, locationId))
+    .limit(1);
+  if (!loc || loc.organization_id !== organization.id)
+    throw new Error("Sede non trovata");
+  const { getLocationStaffingForMonth: fetchMonth } = await import("@/lib/locations");
+  return fetchMonth(locationId, year, month);
 }
 
 export type LocationRoleShiftTimesInput = {

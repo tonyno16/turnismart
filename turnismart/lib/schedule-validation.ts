@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import {
   shifts,
   employees,
+  employeeRoles,
   employeeAvailability,
   employeeAvailabilityExceptions,
   employeeIncompatibilities,
@@ -11,6 +12,7 @@ import {
 } from "@/drizzle/schema";
 import type { AvailabilityShiftPeriod } from "@/drizzle/schema/employee-availability";
 import { getEmployeeWeekShifts } from "./schedules";
+import { shiftMinutesInWeek } from "./schedule-utils";
 
 export type ValidationConflict = {
   type:
@@ -19,7 +21,9 @@ export type ValidationConflict = {
     | "rest_period"
     | "incompatibility"
     | "availability"
-    | "time_off";
+    | "time_off"
+    | "past_date"
+    | "role_mismatch";
   message: string;
 };
 
@@ -81,11 +85,9 @@ export async function checkMaxWeeklyHours(
   let totalMins = 0;
   for (const s of existingShifts) {
     if (s.id === excludeShiftId) continue;
-    totalMins +=
-      parseTimeMinutes(s.end_time) - parseTimeMinutes(s.start_time);
+    totalMins += shiftMinutesInWeek(s.date, s.start_time, s.end_time, weekStart);
   }
-  const newMins =
-    parseTimeMinutes(endTime) - parseTimeMinutes(startTime);
+  const newMins = shiftMinutesInWeek(date, startTime, endTime, weekStart);
   totalMins += newMins;
   const totalHours = totalMins / 60;
   if (totalHours > emp.max_weekly_hours) {
@@ -288,6 +290,42 @@ export async function checkTimeOff(
   return null;
 }
 
+/** Check if employee has the required role */
+async function checkEmployeeHasRole(
+  employeeId: string,
+  roleId: string
+): Promise<ValidationConflict | null> {
+  const [row] = await db
+    .select({ id: employeeRoles.id })
+    .from(employeeRoles)
+    .where(
+      and(
+        eq(employeeRoles.employee_id, employeeId),
+        eq(employeeRoles.role_id, roleId)
+      )
+    )
+    .limit(1);
+  if (!row) {
+    return {
+      type: "role_mismatch",
+      message: "Il dipendente non ha la mansione richiesta per questo turno",
+    };
+  }
+  return null;
+}
+
+/** Check if date is in the past - no shifts in past days */
+function checkPastDate(date: string): ValidationConflict | null {
+  const today = format(new Date(), "yyyy-MM-dd");
+  if (date < today) {
+    return {
+      type: "past_date",
+      message: "Non è possibile creare turni nei giorni passati",
+    };
+  }
+  return null;
+}
+
 /** Run all validations, return first conflict or null */
 export async function validateShiftAssignment(params: {
   employeeId: string;
@@ -309,6 +347,12 @@ export async function validateShiftAssignment(params: {
     params.startTime >= "14:00"
       ? "evening"
       : "morning";
+
+  const pastDateResult = checkPastDate(params.date);
+  if (pastDateResult) return pastDateResult;
+
+  const roleResult = await checkEmployeeHasRole(params.employeeId, params.roleId);
+  if (roleResult) return roleResult;
 
   // Batch 1: fast, independent checks in parallel
   const [overlapResult, availResult, timeOffResult, exceptionResult] = await Promise.all([

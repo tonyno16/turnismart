@@ -1,10 +1,10 @@
 import {
   pgTable,
+  date,
   integer,
   text,
   timestamp,
   uuid,
-  unique,
 } from "drizzle-orm/pg-core";
 import { locations } from "./locations";
 import { roles } from "./roles";
@@ -27,6 +27,8 @@ export const staffingRequirements = pgTable(
       enum: shiftPeriods,
     }).notNull(),
     required_count: integer("required_count").default(1).notNull(),
+    /** NULL = modello ricorrente (tutte le settimane). Valore = override per quella settimana (lunedì). */
+    week_start_date: date("week_start_date"),
     created_at: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -35,11 +37,6 @@ export const staffingRequirements = pgTable(
       .notNull(),
   },
   (t) => [
-    unique("staffing_loc_role_day_period_unique").on(
-      t.location_id,
-      t.role_id,
-      t.day_of_week,
-      t.shift_period
-    ),
+    // Vincoli univoci parziali gestiti in migrazione 0022
   ]
 );

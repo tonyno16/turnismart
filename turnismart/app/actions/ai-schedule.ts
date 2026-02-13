@@ -8,6 +8,7 @@ import {
   collectSchedulingConstraints,
   generateScheduleWithAI,
   saveGeneratedShifts,
+  fillUncoveredSlots,
 } from "@/lib/ai-schedule";
 
 export type GenerateResult =
@@ -38,7 +39,19 @@ export async function generateScheduleWithAIAction(
       return { ok: false, error: "Nessun fabbisogno configurato per le sedi" };
     }
 
-    const generated = await generateScheduleWithAI(organization.id, constraints, weekStart);
+    let generated = await generateScheduleWithAI(organization.id, constraints, weekStart);
+
+    const nameToId = new Map(
+      constraints.employees.map((e) => [e.name.toLowerCase().trim(), e.id])
+    );
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    generated = generated.map((s) => {
+      if (!uuidRegex.test(s.employeeId)) {
+        const resolved = nameToId.get(String(s.employeeId).toLowerCase().trim());
+        if (resolved) return { ...s, employeeId: resolved };
+      }
+      return s;
+    });
 
     if (mode === "fill_gaps") {
       const existingCount = 0;
@@ -58,16 +71,23 @@ export async function generateScheduleWithAIAction(
       generated
     );
 
+    const filler = await fillUncoveredSlots(
+      organization.id,
+      schedule.id,
+      weekStart
+    );
+
     await incrementUsage(organization.id, "ai_generations_count");
 
     revalidatePath("/schedule");
     revalidatePath("/dashboard");
 
+    const allErrors = [...result.errors, ...filler.errors];
     return {
       ok: true,
-      saved: result.saved,
+      saved: result.saved + filler.filled,
       skipped: result.skipped,
-      errors: result.errors,
+      errors: allErrors,
     };
   } catch (e) {
     return {

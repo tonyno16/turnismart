@@ -255,6 +255,32 @@ export async function deleteShift(shiftId: string) {
   revalidatePath("/schedule");
 }
 
+/** Elimina tutti i turni attivi della programmazione corrente */
+export async function deleteAllShifts(scheduleId: string) {
+  const { organization } = await requireOrganization();
+  const [sched] = await db
+    .select()
+    .from(schedules)
+    .where(
+      and(
+        eq(schedules.id, scheduleId),
+        eq(schedules.organization_id, organization.id)
+      )
+    )
+    .limit(1);
+  if (!sched) throw new Error("Programmazione non trovata");
+
+  await db
+    .delete(shifts)
+    .where(
+      and(
+        eq(shifts.schedule_id, scheduleId),
+        eq(shifts.organization_id, organization.id)
+      )
+    );
+  revalidatePath("/schedule");
+}
+
 export async function cancelShift(shiftId: string, reason?: string) {
   const { organization } = await requireOrganization();
   const [shift] = await db

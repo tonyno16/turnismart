@@ -81,7 +81,7 @@ export default async function LocationDetailPage({
         {otherLocations.length > 0 && (
           <div className="mt-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-700">
             <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Copia il fabbisogno da un&apos;altra sede (sovrascrive il corrente)
+              Copia il modello standard da un&apos;altra sede (sovrascrive il modello corrente)
             </p>
             <CopyStaffingForm
               currentLocationId={location.id}
@@ -92,7 +92,7 @@ export default async function LocationDetailPage({
         <LocationStaffingGrid
           locationId={location.id}
           roles={roles}
-          staffing={location.staffing}
+          initialStaffing={location.staffing}
         />
       </div>
 

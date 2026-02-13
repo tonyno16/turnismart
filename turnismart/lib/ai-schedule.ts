@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { addDays, format, parseISO } from "date-fns";
 import OpenAI from "openai";
 import { db } from "@/lib/db";
@@ -19,8 +19,11 @@ import {
   getPeriodTimesForOrganization,
   getRoleShiftTimesOverrides,
   getLocationRoleShiftTimesOverrides,
+  getPeriodTimesForRole,
+  getStaffingCoverage,
 } from "./schedules";
 import { validateShiftAssignment } from "./schedule-validation";
+import { shiftMinutesInWeek } from "./schedule-utils";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -67,20 +70,55 @@ export async function collectSchedulingConstraints(
 
   const locIds = new Set(filteredLocs.map((l) => l.id));
 
-  const allStaffing = await db
-    .select({
-      location_id: staffingRequirements.location_id,
-      day_of_week: staffingRequirements.day_of_week,
-      shift_period: staffingRequirements.shift_period,
-      role_id: staffingRequirements.role_id,
-      role_name: roles.name,
-      required_count: staffingRequirements.required_count,
-    })
-    .from(staffingRequirements)
-    .innerJoin(roles, eq(staffingRequirements.role_id, roles.id))
-    .innerJoin(locations, eq(staffingRequirements.location_id, locations.id))
-    .where(eq(locations.organization_id, organizationId));
+  const [templateStaffing, overrideStaffing] = await Promise.all([
+    db
+      .select({
+        location_id: staffingRequirements.location_id,
+        day_of_week: staffingRequirements.day_of_week,
+        shift_period: staffingRequirements.shift_period,
+        role_id: staffingRequirements.role_id,
+        role_name: roles.name,
+        required_count: staffingRequirements.required_count,
+      })
+      .from(staffingRequirements)
+      .innerJoin(roles, eq(staffingRequirements.role_id, roles.id))
+      .innerJoin(locations, eq(staffingRequirements.location_id, locations.id))
+      .where(
+        and(
+          eq(locations.organization_id, organizationId),
+          isNull(staffingRequirements.week_start_date)
+        )
+      ),
+    db
+      .select({
+        location_id: staffingRequirements.location_id,
+        day_of_week: staffingRequirements.day_of_week,
+        shift_period: staffingRequirements.shift_period,
+        role_id: staffingRequirements.role_id,
+        role_name: roles.name,
+        required_count: staffingRequirements.required_count,
+      })
+      .from(staffingRequirements)
+      .innerJoin(roles, eq(staffingRequirements.role_id, roles.id))
+      .innerJoin(locations, eq(staffingRequirements.location_id, locations.id))
+      .where(
+        and(
+          eq(locations.organization_id, organizationId),
+          eq(staffingRequirements.week_start_date, weekStart)
+        )
+      ),
+  ]);
 
+  const overrideKey = (r: { location_id: string; role_id: string; day_of_week: number; shift_period: string }) =>
+    `${r.location_id}_${r.role_id}_${r.day_of_week}_${r.shift_period}`;
+  const overrideMap = new Map(overrideStaffing.map((r) => [overrideKey(r), r]));
+  const templateKeys = new Set(templateStaffing.map((t) => overrideKey(t)));
+  const mergedFromTemplate =
+    templateStaffing.length > 0
+      ? templateStaffing.map((t) => overrideMap.get(overrideKey(t)) ?? t)
+      : [];
+  const overrideOnly = overrideStaffing.filter((o) => !templateKeys.has(overrideKey(o)));
+  const allStaffing = [...mergedFromTemplate, ...overrideOnly];
   const staffingForLocs = allStaffing.filter((s) => locIds.has(s.location_id));
 
   const emps = await db
@@ -209,6 +247,8 @@ export async function generateScheduleWithAI(
 
   const prompt = `Sei un esperto di scheduling. Genera un orario settimanale ottimale.
 
+OBIETTIVO PRINCIPALE: Copri OGNI slot richiesto. Ogni cella con required>0 deve avere esattamente required assegnazioni. Non lasciare celle vuote (0/1) se esiste un dipendente idoneo. La copertura totale ha priorità sul bilanciamento ore.
+
 Settimana: ${weekStart} (lunedì = giorno 0, domenica = giorno 6).
 
 LOCALI E FABBISOGNO:
@@ -221,13 +261,14 @@ PERIODI ORARI:
 ${JSON.stringify(periodTimes)}
 
 REGOLE:
-1. Assegna solo dipendenti disponibili (availability status "available", "preferred" o "avoid". "unavailable" = mai. "avoid" = evita se possibile)
+1. DISPONIBILITÀ: Se availability è [] (vuoto), il dipendente è SEMPRE disponibile. Se ha record: "available"/"preferred" = assegnabile. "avoid" = evita se possibile. "unavailable" = mai in quel giorno/periodo.
 2. Rispetta timeOffDates e exceptionDates: non assegnare in quelle date
-3. periodPreference: se presente, preferisci turni mattina/sera di conseguenza (ma puoi ignorare se necessario)
+3. periodPreference: se presente, preferisci turni mattina/sera (puoi ignorare se necessario per coprire)
 4. Non assegnare due dipendenti incompatibili (incompatibleWith) allo stesso turno
 5. Ogni dipendente max maxHours ore/settimana
 6. Riposo 11h tra turni consecutivi
-7. Un dipendente deve avere il ruolo richiesto (roleIds contiene roleId del turno)
+7. Un dipendente deve avere il ruolo richiesto (roleIds deve contenere il roleId dello slot)
+8. Per ogni slot: genera ESATTAMENTE required assegnazioni, mai di più. Non superare mai required per cella.
 
 Rispondi SOLO con un array JSON di oggetti: [{"employeeId":"uuid","locationId":"uuid","roleId":"uuid","dayOfWeek":0-6,"period":"morning|evening"}]
 Nessun altro testo.`;
@@ -261,16 +302,48 @@ export async function saveGeneratedShifts(
   shiftsToSave: GeneratedShift[]
 ): Promise<{ saved: number; skipped: number; errors: string[] }> {
   const weekStartDate = parseISO(weekStart);
-  const [orgPeriodTimes, roleOverrides, locationRoleOverrides] = await Promise.all([
+  const [orgPeriodTimes, roleOverrides, locationRoleOverrides, coverage] = await Promise.all([
     getPeriodTimesForOrganization(organizationId),
     getRoleShiftTimesOverrides(organizationId),
     getLocationRoleShiftTimesOverrides(organizationId),
+    getStaffingCoverage(organizationId, weekStart, scheduleId),
   ]);
+
+  const coverageRequired = new Map(
+    coverage.map((c) => [
+      `${c.locationId}:${c.roleId}:${c.dayOfWeek}:${c.shiftPeriod}`,
+      c.required,
+    ])
+  );
+  const insertedPerSlot = new Map<string, number>();
+
   const errors: string[] = [];
   let saved = 0;
   let skipped = 0;
 
   for (const s of shiftsToSave) {
+    const slotKey = `${s.locationId}:${s.roleId}:${s.dayOfWeek}:${s.period}`;
+    const required = coverageRequired.get(slotKey) ?? 0;
+    const alreadyInserted = insertedPerSlot.get(slotKey) ?? 0;
+    const existingAssigned = coverage.find(
+      (c) =>
+        c.locationId === s.locationId &&
+        c.roleId === s.roleId &&
+        c.dayOfWeek === s.dayOfWeek &&
+        c.shiftPeriod === s.period
+    )?.assigned ?? 0;
+    const totalForSlot = existingAssigned + alreadyInserted;
+    if (required <= 0) {
+      errors.push(`${s.employeeId} @ slot ${slotKey}: nessun fabbisogno`);
+      skipped++;
+      continue;
+    }
+    if (totalForSlot >= required) {
+      errors.push(`${s.employeeId} @ slot ${slotKey}: già coperto (${totalForSlot}/${required})`);
+      skipped++;
+      continue;
+    }
+
     const date = format(addDays(weekStartDate, s.dayOfWeek), "yyyy-MM-dd");
     const dayKey = `${s.locationId}:${s.roleId}:${s.period}:${s.dayOfWeek}`;
     const locKey = `${s.locationId}:${s.roleId}:${s.period}`;
@@ -315,6 +388,7 @@ export async function saveGeneratedShifts(
         is_auto_generated: true,
         status: "active",
       });
+      insertedPerSlot.set(slotKey, (insertedPerSlot.get(slotKey) ?? 0) + 1);
       saved++;
     } catch (e) {
       errors.push(
@@ -325,4 +399,114 @@ export async function saveGeneratedShifts(
   }
 
   return { saved, skipped, errors };
+}
+
+/** Riempie deterministicamente le celle scoperte (0/N) con dipendenti idonei.
+ * Ordina i candidati per ore assegnate (asc) per favorire chi ha meno turni. */
+export async function fillUncoveredSlots(
+  organizationId: string,
+  scheduleId: string,
+  weekStart: string
+): Promise<{ filled: number; errors: string[] }> {
+  const weekStartDate = parseISO(weekStart);
+  const [coverage, empRoles, activeEmps, currentShifts] = await Promise.all([
+    getStaffingCoverage(organizationId, weekStart, scheduleId),
+    db
+      .select({ employee_id: employeeRoles.employee_id, role_id: employeeRoles.role_id })
+      .from(employeeRoles)
+      .innerJoin(roles, eq(employeeRoles.role_id, roles.id))
+      .where(eq(roles.organization_id, organizationId)),
+    db
+      .select({ id: employees.id })
+      .from(employees)
+      .where(and(eq(employees.organization_id, organizationId), eq(employees.is_active, true))),
+    db
+      .select({
+        employee_id: shifts.employee_id,
+        date: shifts.date,
+        start_time: shifts.start_time,
+        end_time: shifts.end_time,
+      })
+      .from(shifts)
+      .where(and(eq(shifts.schedule_id, scheduleId), eq(shifts.status, "active"))),
+  ]);
+
+  const activeIds = new Set(activeEmps.map((e) => e.id));
+  const roleToEmployees = new Map<string, string[]>();
+  for (const er of empRoles) {
+    if (!activeIds.has(er.employee_id)) continue;
+    const arr = roleToEmployees.get(er.role_id) ?? [];
+    arr.push(er.employee_id);
+    roleToEmployees.set(er.role_id, arr);
+  }
+
+  const empMinutes = new Map<string, number>();
+  for (const s of currentShifts) {
+    const mins = shiftMinutesInWeek(s.date, s.start_time, s.end_time, weekStart);
+    empMinutes.set(s.employee_id, (empMinutes.get(s.employee_id) ?? 0) + mins);
+  }
+
+  const uncovered = coverage.filter((c) => c.assigned < c.required);
+  const errors: string[] = [];
+  let filled = 0;
+
+  for (const slot of uncovered) {
+    const need = slot.required - slot.assigned;
+    const candidates = (roleToEmployees.get(slot.roleId) ?? []).slice();
+    candidates.sort((a, b) => (empMinutes.get(a) ?? 0) - (empMinutes.get(b) ?? 0));
+
+    const date = format(addDays(weekStartDate, slot.dayOfWeek), "yyyy-MM-dd");
+    const times = await getPeriodTimesForRole(
+      organizationId,
+      slot.roleId,
+      slot.shiftPeriod,
+      slot.locationId,
+      date
+    );
+
+    for (let i = 0; i < need; i++) {
+      let assigned = false;
+      for (const empId of candidates) {
+        const conflict = await validateShiftAssignment({
+          employeeId: empId,
+          organizationId,
+          scheduleId,
+          locationId: slot.locationId,
+          roleId: slot.roleId,
+          date,
+          startTime: times.start,
+          endTime: times.end,
+          weekStart,
+        });
+        if (conflict) continue;
+        try {
+          await db.insert(shifts).values({
+            schedule_id: scheduleId,
+            organization_id: organizationId,
+            location_id: slot.locationId,
+            employee_id: empId,
+            role_id: slot.roleId,
+            date,
+            start_time: times.start,
+            end_time: times.end,
+            break_minutes: 0,
+            is_auto_generated: true,
+            status: "active",
+          });
+          const mins = shiftMinutesInWeek(date, times.start, times.end, weekStart);
+          empMinutes.set(empId, (empMinutes.get(empId) ?? 0) + mins);
+          filled++;
+          assigned = true;
+          break;
+        } catch (e) {
+          errors.push(`${slot.locationName}/${slot.roleName} ${date} ${slot.shiftPeriod}: ${e instanceof Error ? e.message : "Errore"}`);
+        }
+      }
+      if (!assigned) {
+        errors.push(`${slot.locationName}/${slot.roleName} ${date} ${slot.shiftPeriod}: nessun dipendente idoneo`);
+      }
+    }
+  }
+
+  return { filled, errors };
 }
