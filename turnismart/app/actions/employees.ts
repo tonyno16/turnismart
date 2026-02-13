@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import {
@@ -10,6 +10,8 @@ import {
   employeeAvailabilityExceptions,
   employeeIncompatibilities,
   employeeTimeOff,
+  roles,
+  locations,
   contractTypes,
   availabilityStatuses,
   timeOffTypes,
@@ -427,4 +429,218 @@ export async function rejectTimeOff(timeOffId: string) {
     .where(eq(employeeTimeOff.id, timeOffId));
   revalidatePath("/employees");
   revalidatePath("/requests");
+}
+
+/** Bulk deactivate selected employees (is_active = false) */
+export async function bulkDeactivate(
+  employeeIds: string[]
+): Promise<{ ok: true; count: number } | { ok: false; error: string }> {
+  const { organization } = await requireOrganization();
+  if (!employeeIds.length) return { ok: false, error: "Nessun dipendente selezionato" };
+
+  const valid = await db
+    .select({ id: employees.id })
+    .from(employees)
+    .where(
+      and(
+        eq(employees.organization_id, organization.id),
+        inArray(employees.id, employeeIds)
+      )
+    );
+  const ids = valid.map((r) => r.id);
+  if (ids.length === 0) return { ok: false, error: "Nessun dipendente valido trovato" };
+
+  await db
+    .update(employees)
+    .set({ is_active: false, updated_at: new Date() })
+    .where(inArray(employees.id, ids));
+  revalidatePath("/employees");
+  revalidatePath("/schedule");
+  return { ok: true, count: ids.length };
+}
+
+/** Bulk add role to selected employees. Skips if already has role or has 3 roles. */
+export async function bulkAddRole(
+  employeeIds: string[],
+  roleId: string
+): Promise<{ ok: true; updated: number; skipped: number } | { ok: false; error: string }> {
+  const { organization } = await requireOrganization();
+  if (!employeeIds.length || !roleId) return { ok: false, error: "Dati mancanti" };
+
+  const roleValid = await db
+    .select({ id: roles.id })
+    .from(roles)
+    .where(
+      and(
+        eq(roles.organization_id, organization.id),
+        eq(roles.id, roleId)
+      )
+    )
+    .limit(1);
+  if (!roleValid.length) return { ok: false, error: "Ruolo non trovato" };
+
+  const validEmps = await db
+    .select({ id: employees.id })
+    .from(employees)
+    .where(
+      and(
+        eq(employees.organization_id, organization.id),
+        inArray(employees.id, employeeIds)
+      )
+    );
+  const existingRoles = await db
+    .select({
+      employee_id: employeeRoles.employee_id,
+      role_id: employeeRoles.role_id,
+      priority: employeeRoles.priority,
+    })
+    .from(employeeRoles)
+    .where(inArray(employeeRoles.employee_id, validEmps.map((e) => e.id)));
+
+  const byEmp = new Map<string, { roleIds: Set<string>; maxPriority: number }>();
+  for (const r of existingRoles) {
+    if (!byEmp.has(r.employee_id)) {
+      byEmp.set(r.employee_id, { roleIds: new Set(), maxPriority: 0 });
+    }
+    const entry = byEmp.get(r.employee_id)!;
+    entry.roleIds.add(r.role_id);
+    entry.maxPriority = Math.max(entry.maxPriority, r.priority);
+  }
+
+  let updated = 0;
+  let skipped = 0;
+  for (const emp of validEmps) {
+    const entry = byEmp.get(emp.id) ?? { roleIds: new Set(), maxPriority: 0 };
+    if (entry.roleIds.has(roleId)) {
+      skipped++;
+      continue;
+    }
+    if (entry.roleIds.size >= 3) {
+      skipped++;
+      continue;
+    }
+    await db.insert(employeeRoles).values({
+      employee_id: emp.id,
+      role_id: roleId,
+      priority: entry.maxPriority + 1,
+    }).onConflictDoNothing({ target: [employeeRoles.employee_id, employeeRoles.role_id] });
+    updated++;
+  }
+  revalidatePath("/employees");
+  revalidatePath("/schedule");
+  return { ok: true, updated, skipped };
+}
+
+/** Bulk remove role from selected employees */
+export async function bulkRemoveRole(
+  employeeIds: string[],
+  roleId: string
+): Promise<{ ok: true; removed: number } | { ok: false; error: string }> {
+  const { organization } = await requireOrganization();
+  if (!employeeIds.length || !roleId) return { ok: false, error: "Dati mancanti" };
+
+  const validEmps = await db
+    .select({ id: employees.id })
+    .from(employees)
+    .where(
+      and(
+        eq(employees.organization_id, organization.id),
+        inArray(employees.id, employeeIds)
+      )
+    );
+  const ids = validEmps.map((e) => e.id);
+
+  const deleted = await db
+    .delete(employeeRoles)
+    .where(
+      and(
+        inArray(employeeRoles.employee_id, ids),
+        eq(employeeRoles.role_id, roleId)
+      )
+    )
+    .returning({ id: employeeRoles.id });
+  const removed = deleted.length;
+  revalidatePath("/employees");
+  revalidatePath("/schedule");
+  return { ok: true, removed };
+}
+
+/** Export employees as CSV. If employeeIds provided, filter to those only. */
+export async function exportEmployeesCsv(
+  employeeIds?: string[]
+): Promise<{ ok: true; csv: string; filename: string } | { ok: false; error: string }> {
+  const { organization } = await requireOrganization();
+
+  const emps = await db
+    .select()
+    .from(employees)
+    .where(
+      employeeIds?.length
+        ? and(
+            eq(employees.organization_id, organization.id),
+            inArray(employees.id, employeeIds)
+          )
+        : eq(employees.organization_id, organization.id)
+    )
+    .orderBy(employees.last_name, employees.first_name);
+
+  if (emps.length === 0) return { ok: false, error: "Nessun dipendente da esportare" };
+
+  const empIds = emps.map((e) => e.id);
+  const empRolesRows = await db
+    .select({
+      employee_id: employeeRoles.employee_id,
+      role_name: roles.name,
+      priority: employeeRoles.priority,
+    })
+    .from(employeeRoles)
+    .innerJoin(roles, eq(employeeRoles.role_id, roles.id))
+    .where(inArray(employeeRoles.employee_id, empIds))
+    .orderBy(employeeRoles.employee_id, employeeRoles.priority);
+
+  const rolesByEmp = new Map<string, string[]>();
+  for (const r of empRolesRows) {
+    if (!rolesByEmp.has(r.employee_id)) rolesByEmp.set(r.employee_id, []);
+    rolesByEmp.get(r.employee_id)!.push(r.role_name);
+  }
+
+  const locIds = [...new Set(emps.map((e) => e.preferred_location_id).filter(Boolean))] as string[];
+  const locMap = new Map<string, string>();
+  if (locIds.length > 0) {
+    const locRows = await db
+      .select({ id: locations.id, name: locations.name })
+      .from(locations)
+      .where(inArray(locations.id, locIds));
+    for (const l of locRows) locMap.set(l.id, l.name);
+  }
+
+  const escapeCsv = (v: string | null | undefined): string => {
+    if (v == null || v === "") return "";
+    const s = String(v);
+    if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+      return `"${s.replace(/"/g, '""')}"`;
+    }
+    return s;
+  };
+
+  const header = "Nome,Cognome,Email,Telefono,Mansioni,Contratto,Ore settimanali,Sede preferita";
+  const rows = emps.map((e) => {
+    const roleNames = (rolesByEmp.get(e.id) ?? []).join("; ");
+    const locName = e.preferred_location_id ? locMap.get(e.preferred_location_id) ?? "" : "";
+    const contract = e.contract_type === "full_time" ? "Full time" : e.contract_type === "part_time" ? "Part time" : e.contract_type === "on_call" ? "A chiamata" : "Stagionale";
+    return [
+      escapeCsv(e.first_name),
+      escapeCsv(e.last_name),
+      escapeCsv(e.email),
+      escapeCsv(e.phone),
+      escapeCsv(roleNames || undefined),
+      escapeCsv(contract),
+      String(e.weekly_hours),
+      escapeCsv(locName),
+    ].join(",");
+  });
+
+  const csv = [header, ...rows].join("\n");
+  const filename = `dipendenti_${new Date().toISOString().slice(0, 10)}.csv`;
+  return { ok: true, csv, filename };
 }

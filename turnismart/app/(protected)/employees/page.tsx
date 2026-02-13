@@ -3,6 +3,7 @@ import { requireOrganization } from "@/lib/auth";
 import { getEmployeesByOrganization } from "@/lib/employees";
 import { getOnboardingData } from "@/app/actions/onboarding";
 import { EmployeesPageClient } from "./employees-page-client";
+import { EmployeesTableClient } from "@/components/employees/employees-table-client";
 
 export default async function EmployeesPage({
   searchParams,
@@ -75,59 +76,10 @@ export default async function EmployeesPage({
           </Link>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/50">
-                <th className="p-3 text-left font-medium">Nome</th>
-                <th className="p-3 text-left font-medium">Contatti</th>
-                <th className="p-3 text-left font-medium">Ore/sett</th>
-                <th className="p-3 text-left font-medium">Stato</th>
-                <th className="p-3 text-right font-medium">Azioni</th>
-              </tr>
-            </thead>
-            <tbody>
-              {employeesList.map((emp) => (
-                <tr
-                  key={emp.id}
-                  className="border-b border-zinc-100 dark:border-zinc-800"
-                >
-                  <td className="p-3">
-                    <Link
-                      href={`/employees/${emp.id}`}
-                      className="font-medium text-[hsl(var(--primary))] hover:underline"
-                    >
-                      {emp.first_name} {emp.last_name}
-                    </Link>
-                  </td>
-                  <td className="p-3 text-zinc-600 dark:text-zinc-400">
-                    {emp.email || emp.phone || "—"}
-                  </td>
-                  <td className="p-3">{emp.weekly_hours}h</td>
-                  <td className="p-3">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs ${
-                        emp.is_active
-                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                          : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
-                      }`}
-                    >
-                      {emp.is_active ? "Attivo" : "Inattivo"}
-                    </span>
-                  </td>
-                  <td className="p-3 text-right">
-                    <Link
-                      href={`/employees/${emp.id}`}
-                      className="text-[hsl(var(--primary))] hover:underline"
-                    >
-                      Modifica
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <EmployeesTableClient
+          employees={employeesList}
+          roles={roles.map((r) => ({ id: r.id, name: r.name }))}
+        />
       )}
     </div>
   );
