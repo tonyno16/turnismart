@@ -601,15 +601,15 @@
 - [ ] Verify all 6 Trigger.dev workflows functional with proper error handling
 - [ ] Verify Stripe integration: checkout, portal, webhook
 - [ ] Verify WhatsApp + Email notifications delivered correctly
-- [ ] Documentation: README con setup instructions per development
+- [x] Documentation: README setup, DEPLOY_CHECKLIST (025)
 
 ### Cosa manca (priorità)
 
 1. ~~**Test E2E**~~ – Fatto (024)
-2. **Security review** – RLS, input validation, rate limiting
-3. **Verifica integrazioni** – Stripe, Trigger.dev CSV, notifiche
-4. **Virtualizzazione griglia** – Scheduler >20 dipendenti (opzionale)
-5. **Documentation** – README setup, checklist deploy
+2. ~~**Documentation**~~ – README, checklist deploy (025)
+3. **Security review** – RLS, input validation, rate limiting
+4. **Verifica integrazioni** – Stripe, Trigger.dev CSV, notifiche
+5. **Virtualizzazione griglia** – Scheduler >20 dipendenti (opzionale)
 
 *Completati: copyStaffingFrom* (016), Vista Per Dipendente/Ruolo (017), responsive (023), E2E onboarding (024).*
 

@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TurniSmart
 
-## Getting Started
+SaaS italiano per la gestione degli orari del personale multi-sede, con ottimizzazione AI, notifiche WhatsApp/Email e report per commercialista.
 
-First, run the development server:
+**Stack:** Next.js 16 · Supabase · Drizzle · Trigger.dev · Stripe · Twilio · Resend · OpenAI
+
+---
+
+## Quick Start
 
 ```bash
+# Clona e installa
+cd turnismart
+npm install
+
+# Copia le variabili d'ambiente
+cp .env.example .env.local   # se esiste, altrimenti crea .env.local manualmente
+
+# Migrazioni DB
+npm run db:migrate
+
+# Avvia
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Apri [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Setup completo
 
-## Learn More
+Il progetto richiede vari servizi esterni. Segui la guida dettagliata:
 
-To learn more about Next.js, take a look at the following resources:
+→ **[SETUP_MANUAL_STEPS.md](./SETUP_MANUAL_STEPS.md)** — configurazione passo-passo di Supabase, Stripe, Trigger.dev, Twilio, Resend, OpenAI.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Variabili minime per partire
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Variabile | Dove prenderla |
+|-----------|----------------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Settings → API |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase |
+| `DATABASE_URL` | Supabase → Settings → Database (Connection string) |
+| `NEXT_PUBLIC_APP_URL` | `http://localhost:3000` in dev |
 
-## Deploy on Vercel
+Altre variabili (Stripe, Trigger, OpenAI, Twilio, Resend) sono necessarie per funzionalità avanzate. Vedi `SETUP_MANUAL_STEPS.md` per l’elenco completo.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Scripts
+
+| Comando | Descrizione |
+|---------|-------------|
+| `npm run dev` | Avvia il server di sviluppo |
+| `npm run build` | Build di produzione |
+| `npm run start` | Avvia in produzione |
+| `npm run db:migrate` | Applica migrazioni Drizzle |
+| `npm run db:generate` | Genera nuova migrazione |
+| `npm run setup:storage` | Crea bucket Supabase Storage |
+| `npm run test` | Test unitari (Vitest) |
+| `npm run test:e2e` | Test E2E (Playwright) |
+| `npm run e2e:onboarding` | Test E2E onboarding completo (reset + test) |
+
+---
+
+## Struttura progetto
+
+```
+app/
+  (public)/        # Landing, pricing, auth
+  (protected)/     # Dashboard, schedule, locations, employees, reports, profile...
+  api/             # Webhooks (Stripe, Trigger), cron, AI
+  actions/         # Server Actions
+components/        # UI riutilizzabili
+lib/               # Utilità (db, auth, AI, notifiche)
+drizzle/           # Schema e migrazioni
+trigger/           # Workflow Trigger.dev (CSV import)
+e2e/               # Test Playwright
+```
+
+---
+
+## Test
+
+```bash
+# Unit test
+npm run test
+
+# E2E (richiede app in esecuzione, Playwright la avvia automaticamente)
+npm run e2e:onboarding    # flusso onboarding → schedule → pubblica
+npm run test:e2e          # tutti i test E2E
+```
+
+Per gli E2E onboarding serve `e2e/.env.test` con `TEST_USER_EMAIL` e `TEST_USER_PASSWORD` di un utente esistente in Supabase.
+
+---
+
+## Deploy
+
+→ **[DEPLOY_CHECKLIST.md](./DEPLOY_CHECKLIST.md)** — checklist pre-produzione.
+
+Vercel è la soluzione consigliata. Configura le variabili d'ambiente come in `.env.local` e assicurati che `NEXT_PUBLIC_APP_URL` punti al dominio di produzione.

@@ -82,10 +82,10 @@ Piano prioritizzato delle migliorie possibili, ordinate per impatto e sforzo.
 
 ## Riepilogo per roadmap
 
-**Priorità attuali (tutti i task 016-024 completati):**
+**Priorità attuali (task 016-025 completati):**
 1. Security review (RLS, rate limiting) – 1 gg
 2. Verifica integrazioni (Stripe, Trigger, notifiche) – 0.5 gg
-3. README setup + checklist deploy – 0.5 gg
+3. ~~README setup + checklist deploy~~ – Fatto (025)
 4. Virtualizzazione griglia (>20 dipendenti) – opzionale
 
 **Post-MVP / backlog:**
