@@ -47,11 +47,18 @@ export default async function ProtectedLayout({
     );
   }
 
+  const isSchedule = pathname === "/schedule" || pathname.startsWith("/schedule/");
   return (
     <div className="flex min-h-screen">
       <AppSidebar userRole={user.role as UserRole} />
       <main className="flex-1 min-w-0 pt-14 pl-0 lg:pt-0 lg:pl-0">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <div
+          className={
+            isSchedule
+              ? "mx-auto max-w-none px-2 py-2 sm:px-3 lg:px-4"
+              : "mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8"
+          }
+        >
           <ErrorBoundary>{children}</ErrorBoundary>
         </div>
       </main>

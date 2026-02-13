@@ -54,6 +54,16 @@ const AIGenerationModal = dynamic(
 
 const DAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
 const VIRTUALIZATION_THRESHOLD = 20;
+
+/** Colori distinti per sedi - bordo e testo */
+const LOCATION_COLORS = [
+  { border: "border-l-blue-500", bg: "bg-blue-50/60", text: "text-blue-800", dark: { border: "dark:border-l-blue-500", bg: "dark:bg-blue-950/30", text: "dark:text-blue-300" } },
+  { border: "border-l-emerald-500", bg: "bg-emerald-50/60", text: "text-emerald-800", dark: { border: "dark:border-l-emerald-500", bg: "dark:bg-emerald-950/30", text: "dark:text-emerald-300" } },
+  { border: "border-l-violet-500", bg: "bg-violet-50/60", text: "text-violet-800", dark: { border: "dark:border-l-violet-500", bg: "dark:bg-violet-950/30", text: "dark:text-violet-300" } },
+  { border: "border-l-amber-500", bg: "bg-amber-50/60", text: "text-amber-800", dark: { border: "dark:border-l-amber-500", bg: "dark:bg-amber-950/30", text: "dark:text-amber-300" } },
+  { border: "border-l-rose-500", bg: "bg-rose-50/60", text: "text-rose-800", dark: { border: "dark:border-l-rose-500", bg: "dark:bg-rose-950/30", text: "dark:text-rose-300" } },
+  { border: "border-l-cyan-500", bg: "bg-cyan-50/60", text: "text-cyan-800", dark: { border: "dark:border-l-cyan-500", bg: "dark:bg-cyan-950/30", text: "dark:text-cyan-300" } },
+] as const;
 const ROW_HEIGHT_ESTIMATE = 52;
 const PERIODS = [
   { id: "morning", label: "Mattina" },
@@ -299,11 +309,11 @@ export function SchedulerClient({
 
   const filteredLocationRoleRows = useMemo(() => {
     if (!filters.onlyUncovered) {
-      return locations.flatMap((loc) =>
-        roles.map((role) => ({ locationId: loc.id, locationName: loc.name, roleId: role.id, roleName: role.name }))
+      return locations.flatMap((loc, locIndex) =>
+        roles.map((role) => ({ locationId: loc.id, locationName: loc.name, roleId: role.id, roleName: role.name, locationIndex: locIndex }))
       );
     }
-    return locations.flatMap((loc) =>
+    return locations.flatMap((loc, locIndex) =>
       roles
         .map((role) => {
           let hasUncovered = false;
@@ -322,7 +332,7 @@ export function SchedulerClient({
               }
             }
           }
-          return { locationId: loc.id, locationName: loc.name, roleId: role.id, roleName: role.name, hasUncovered };
+          return { locationId: loc.id, locationName: loc.name, roleId: role.id, roleName: role.name, locationIndex: locIndex, hasUncovered };
         })
         .filter((r) => r.hasUncovered)
         .map(({ hasUncovered: _, ...r }) => r)
@@ -491,9 +501,9 @@ export function SchedulerClient({
   }
 
   return (
-    <div className="flex min-h-[400px] flex-col gap-4 overflow-hidden lg:h-[calc(100vh-4rem)] lg:flex-row">
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-zinc-200 pb-4 dark:border-zinc-800 sm:gap-4">
+    <div className="flex min-h-[400px] flex-col gap-2 overflow-hidden lg:h-[calc(100vh-2rem)] lg:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex shrink-0 flex-col gap-2 border-b border-zinc-200 pb-2 dark:border-zinc-800 sm:gap-3">
           {/* Row 1: Title + Vista + Week nav */}
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             <h1 className="text-xl font-bold text-zinc-900 dark:text-white sm:text-2xl">
@@ -681,7 +691,7 @@ export function SchedulerClient({
         </div>
 
         {/* Legenda */}
-        <div className="mt-2 flex flex-wrap items-center gap-4 rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-400">
+        <div className="mt-1 flex flex-wrap items-center gap-3 rounded-lg bg-zinc-50 px-2 py-1.5 text-xs text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-400">
           <span><strong>Mattina</strong> = turno prima delle 14:00</span>
           <span><strong>Sera</strong> = turno dalle 14:00</span>
           <span className="flex items-center gap-1.5">
@@ -692,9 +702,13 @@ export function SchedulerClient({
             <span className="rounded px-1.5 py-0.5 text-zinc-500">n/m</span>
             = assegnati / richiesti
           </span>
+          <span className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1 rounded border border-amber-500/80 bg-amber-50 px-1.5 py-0.5 text-amber-800 dark:border-amber-500/60 dark:bg-amber-950/30 dark:text-amber-300">⚠ fuori ruolo</span>
+            = dipendente assegnato a ruolo non suo
+          </span>
         </div>
 
-        <div className="relative mt-4 flex flex-1 overflow-auto [-webkit-overflow-scrolling:touch]">
+        <div className="relative mt-2 flex min-h-0 flex-1 overflow-auto [-webkit-overflow-scrolling:touch]">
           {/* Toggle dipendenti su mobile/tablet (< lg) */}
           {viewMode === "location" && (
             <button
@@ -753,18 +767,20 @@ export function SchedulerClient({
                           ? "Dipendente"
                           : "Ruolo / Dipendente"}
                       </th>
-                      {DAY_LABELS.flatMap((dayLabel, day) =>
-                        PERIODS.map((p) => (
+                      {DAY_LABELS.flatMap((dayLabel, day) => {
+                        const dayDate = addDays(parseISO(weekStart), day);
+                        const dayNum = format(dayDate, "d");
+                        return PERIODS.map((p) => (
                           <th
                             key={`${day}-${p.id}`}
                             className="min-w-[90px] border-l border-zinc-200 px-2 py-2 text-center text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
-                            title={`${dayLabel} ${p.label}`}
+                            title={`${dayLabel} ${dayNum} ${p.label}`}
                           >
-                            <span className="block text-[10px] text-zinc-400">{dayLabel}</span>
+                            <span className="block text-[10px] text-zinc-400">{dayLabel} {dayNum}</span>
                             <span className="block mt-0.5">{p.label.slice(0, 3)}</span>
                           </th>
-                        ))
-                      )}
+                        ));
+                      })}
                     </tr>
                   </thead>
                   <tbody>
@@ -797,7 +813,9 @@ export function SchedulerClient({
                                     locationName: locName,
                                     roleId: roleIdR,
                                     roleName: roleNameR,
+                                    locationIndex: locIndex,
                                   } = filteredLocationRoleRows[virtualRow.index];
+                                  const locStyle = LOCATION_COLORS[locIndex % LOCATION_COLORS.length];
                                   return (
                                     <div
                                       key={`${locId}-${roleIdR}`}
@@ -808,8 +826,8 @@ export function SchedulerClient({
                                         height: `${virtualRow.size}px`,
                                       }}
                                     >
-                                      <div className="sticky left-0 z-10 min-w-[140px] shrink-0 bg-white px-3 py-2.5 dark:bg-zinc-900">
-                                        <span className="font-medium">{locName}</span>
+                                      <div className={`sticky left-0 z-10 min-w-[140px] shrink-0 border-l-4 px-3 py-2.5 ${locStyle.border} ${locStyle.dark.border} ${locStyle.bg} ${locStyle.dark.bg}`}>
+                                        <span className={`font-bold ${locStyle.text} ${locStyle.dark.text}`}>{locName}</span>
                                         <span className="text-zinc-500"> / {roleNameR}</span>
                                       </div>
                                       {Array.from({ length: 7 }, (_, day) =>
@@ -836,6 +854,7 @@ export function SchedulerClient({
                                               assigned={assigned}
                                               required={required}
                                               weekStart={weekStart}
+                                              employeeRoleIds={employeeRoleIds}
                                               onDelete={handleDeleteShift}
                                               onFindSubstitute={handleFindSubstitute}
                                               onUpdateNotes={handleUpdateNotes}
@@ -858,13 +877,16 @@ export function SchedulerClient({
                               locationName: locName,
                               roleId: roleIdR,
                               roleName: roleNameR,
-                            }) => (
+                              locationIndex: locIndex,
+                            }) => {
+                              const locStyle = LOCATION_COLORS[locIndex % LOCATION_COLORS.length];
+                              return (
                               <tr
                                 key={`${locId}-${roleIdR}`}
                                 className="border-b border-zinc-100 transition-colors hover:bg-zinc-50/50 dark:border-zinc-800 dark:hover:bg-zinc-800/30 [content-visibility:auto]"
                               >
-                                <td className="sticky left-0 z-10 bg-white px-3 py-2.5 dark:bg-zinc-900">
-                                  <span className="font-medium">{locName}</span>
+                                <td className={`sticky left-0 z-10 border-l-4 px-3 py-2.5 ${locStyle.border} ${locStyle.dark.border} ${locStyle.bg} ${locStyle.dark.bg}`}>
+                                  <span className={`font-bold ${locStyle.text} ${locStyle.dark.text}`}>{locName}</span>
                                   <span className="text-zinc-500">
                                     {" "}
                                     / {roleNameR}
@@ -893,6 +915,7 @@ export function SchedulerClient({
                                         assigned={assigned}
                                         required={required}
                                         weekStart={weekStart}
+                                        employeeRoleIds={employeeRoleIds}
                                         onDelete={handleDeleteShift}
                                         onFindSubstitute={handleFindSubstitute}
                                         onUpdateNotes={handleUpdateNotes}
@@ -903,7 +926,8 @@ export function SchedulerClient({
                                   })
                                 )}
                               </tr>
-                            )
+                            );
+                            }
                           )
                         )}
                       </>
@@ -1229,7 +1253,7 @@ export function SchedulerClient({
               </div>
             </div>
 
-            <div className="hidden w-56 shrink-0 border-l border-zinc-200 pl-4 dark:border-zinc-800 lg:block">
+            <div className="hidden w-48 shrink-0 border-l border-zinc-200 pl-3 dark:border-zinc-800 lg:block">
               {viewMode !== "location" && (
                 <p className="mb-2 text-xs text-amber-600 dark:text-amber-500">
                   Vista sola lettura. Passa a &quot;Per sede&quot; per assegnare.
@@ -1330,6 +1354,7 @@ const ShiftCell = memo(function ShiftCell({
   assigned,
   required,
   weekStart,
+  employeeRoleIds,
   onDelete,
   onFindSubstitute,
   onUpdateNotes,
@@ -1345,6 +1370,7 @@ const ShiftCell = memo(function ShiftCell({
   assigned: number;
   required: number;
   weekStart: string;
+  employeeRoleIds?: Record<string, string[]>;
   onDelete: (id: string) => void;
   onFindSubstitute: (shift: { id: string; date: string; location_name: string; role_name: string; employee_name: string }) => void;
   onUpdateNotes: (id: string, notes: string | null) => void;
@@ -1365,18 +1391,22 @@ const ShiftCell = memo(function ShiftCell({
   return (
     <Wrapper ref={setNodeRef} className={className}>
       <div className="min-h-[48px] space-y-1">
-        {shifts.map((s) => (
-          <ShiftCard
-            key={s.id}
-            shift={s}
-            weekStart={weekStart}
-            onDelete={onDelete}
-            onFindSubstitute={onFindSubstitute}
-            onUpdateNotes={onUpdateNotes}
-            onUpdateTimes={onUpdateTimes}
-            onDuplicate={onDuplicate}
-          />
-        ))}
+        {shifts.map((s) => {
+          const hasRole = (employeeRoleIds?.[s.employee_id] ?? []).includes(s.role_id);
+          return (
+            <ShiftCard
+              key={s.id}
+              shift={s}
+              weekStart={weekStart}
+              isRoleMismatch={!hasRole}
+              onDelete={onDelete}
+              onFindSubstitute={onFindSubstitute}
+              onUpdateNotes={onUpdateNotes}
+              onUpdateTimes={onUpdateTimes}
+              onDuplicate={onDuplicate}
+            />
+          );
+        })}
         {required > 0 && (
           <div
             className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${

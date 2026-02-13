@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect, memo } from "react";
 import { format, addDays, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
-import { FileText, Copy, Clock } from "lucide-react";
+import { FileText, Copy, Clock, AlertTriangle } from "lucide-react";
 
 /** Subset di shift usato da ShiftCard; compatibile con il tipo Shift dello scheduler */
 type ShiftForCard = {
@@ -20,6 +20,7 @@ type ShiftForCard = {
 export const ShiftCard = memo(function ShiftCard({
   shift,
   weekStart,
+  isRoleMismatch = false,
   onDelete,
   onFindSubstitute,
   onUpdateNotes,
@@ -28,6 +29,7 @@ export const ShiftCard = memo(function ShiftCard({
 }: {
   shift: ShiftForCard;
   weekStart: string;
+  isRoleMismatch?: boolean;
   onDelete: (id: string) => void;
   onFindSubstitute: (shift: ShiftForCard) => void;
   onUpdateNotes: (id: string, notes: string | null) => void;
@@ -92,9 +94,17 @@ export const ShiftCard = memo(function ShiftCard({
   return (
     <div
       ref={cardRef}
-      className="group relative flex flex-col gap-0.5 rounded-lg border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-2 py-1.5 pr-7 text-xs"
+      className={`group relative flex flex-col gap-0.5 rounded-lg border px-2 py-1.5 pr-7 text-xs ${
+        isRoleMismatch
+          ? "border-amber-500/80 bg-amber-50/80 dark:border-amber-500/60 dark:bg-amber-950/30"
+          : "border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10"
+      }`}
+      title={isRoleMismatch ? "Dipendente assegnato a ruolo non tra i suoi" : undefined}
     >
-      <div className="min-w-0 flex-1 truncate font-medium">
+      <div className="min-w-0 flex-1 truncate font-medium flex items-center gap-1">
+        {isRoleMismatch && (
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+        )}
         <span className="truncate">{shift.employee_name}</span>
         {shift.notes && (
           <span className="ml-1 text-[10px] text-zinc-500" title={shift.notes}>
