@@ -9,6 +9,10 @@ const DEFAULTS = {
   min_rest_between_shifts_hours: 11,
   max_consecutive_days: 6,
   overtime_threshold_hours: 40,
+  shift_times: {
+    morning: { start: "08:00", end: "14:00" },
+    evening: { start: "14:00", end: "23:00" },
+  },
 };
 
 export default async function WorkRulesPage() {
@@ -20,12 +24,23 @@ export default async function WorkRulesPage() {
     .limit(1);
 
   const workRules = (settings?.work_rules as Record<string, unknown>) ?? {};
+  const st = workRules.shift_times as { morning?: { start?: string; end?: string }; evening?: { start?: string; end?: string } } | undefined;
   const values = {
     min_rest_between_shifts_hours:
       (workRules.min_rest_between_shifts_hours as number) ?? DEFAULTS.min_rest_between_shifts_hours,
     max_consecutive_days: (workRules.max_consecutive_days as number) ?? DEFAULTS.max_consecutive_days,
     overtime_threshold_hours:
       (workRules.overtime_threshold_hours as number) ?? DEFAULTS.overtime_threshold_hours,
+    shift_times: {
+      morning: {
+        start: st?.morning?.start ?? DEFAULTS.shift_times.morning.start,
+        end: st?.morning?.end ?? DEFAULTS.shift_times.morning.end,
+      },
+      evening: {
+        start: st?.evening?.start ?? DEFAULTS.shift_times.evening.start,
+        end: st?.evening?.end ?? DEFAULTS.shift_times.evening.end,
+      },
+    },
   };
 
   return (

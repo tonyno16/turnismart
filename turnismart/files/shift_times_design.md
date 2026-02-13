@@ -23,19 +23,16 @@ Non è realistico: il cuoco può fare 10–15, il cameriere 11–16, il barista 
 
 ### Fase 1 – Quick win (1–2 giorni, nessuna migrazione DB)
 
-**A) Modifica orari singolo turno (UI mancante)**
+**A) Modifica orari singolo turno** ✅ *Implementato*
 
 - Il backend (`updateShift`) **già supporta** `startTime` e `endTime`.
 - Manca solo l’UI: clic sul turno → modale “Modifica orari” con due campi ora (es. 11:00, 16:00).
 - Posizione: aggiungere un pulsante/azione nella `ShiftCard` (es. icona orologio) che apre un popover/modal.
 
-**B) Default organizzazione (opzionale, se si usa `organization_settings`)**
+**B) Default organizzazione** ✅ *Implementato*
 
-- Aggiungere in `organization_settings.work_rules` (o nuovo `shift_times_default`):
-  ```json
-  { "morning": { "start": "08:00", "end": "14:00" }, "evening": { "start": "14:00", "end": "23:00" } }
-  ```
-- Leggere da qui invece che da `PERIOD_TIMES` hardcoded; UI in Profilo/Impostazioni.
+- Salvati in `work_rules.shift_times`; UI in Impostazioni → Regole di lavoro.
+- Creazione turni (drag, AI) usa i tempi configurati; fallback a 08–14 / 14–23 se non impostati.
 
 **Risultato Fase 1:**  
 - Orari modificabili turno per turno.  
@@ -117,7 +114,7 @@ Se servono orari diversi per sede (es. Pinerolo 11–16, Piosacco 10–15):
 
 **“Tutti i giorni uguali?”**  
 - Sì, con Fase 2 e 3: un’impostazione vale per tutta la settimana.  
-- Per differenze per giorno (es. sabato diverso): possibile in Fase 3 estendendo con `day_of_week` nel template.
+- **Orari per giorno** ✅: `day_of_week` in role_shift_times e location_role_shift_times (0–6 = giorno, 7 = tutti). UI Mansioni: "Orari sabato e domenica".
 
 **“Dove configuro?”**  
 - **Impostazioni org:** Default Mattina/Sera (Fase 1B).  

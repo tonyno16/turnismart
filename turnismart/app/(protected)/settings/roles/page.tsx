@@ -1,9 +1,8 @@
-import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { requireOrganization } from "@/lib/auth";
-import { db } from "@/lib/db";
-import { roles } from "@/drizzle/schema";
+import { getRolesForOrganization, getRoleShiftTimesForOrganization } from "@/lib/roles";
 import { RolesManager } from "./roles-manager";
+import { RoleShiftTimesForm } from "./role-shift-times-form";
 
 export default async function RolesSettingsPage() {
   const { user, organization } = await requireOrganization();
@@ -17,11 +16,10 @@ export default async function RolesSettingsPage() {
     );
   }
 
-  const orgRoles = await db
-    .select()
-    .from(roles)
-    .where(eq(roles.organization_id, organization.id))
-    .orderBy(roles.sort_order, roles.name);
+  const [orgRoles, roleShiftTimesMap] = await Promise.all([
+    getRolesForOrganization(organization.id),
+    getRoleShiftTimesForOrganization(organization.id),
+  ]);
 
   return (
     <div className="space-y-8">
@@ -41,6 +39,7 @@ export default async function RolesSettingsPage() {
       </div>
 
       <RolesManager roles={orgRoles} />
+      <RoleShiftTimesForm roles={orgRoles} initialTimes={roleShiftTimesMap} />
     </div>
   );
 }

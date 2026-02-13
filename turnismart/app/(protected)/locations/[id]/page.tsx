@@ -1,9 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireOrganization } from "@/lib/auth";
-import { getLocationWithStaffing, getLocations } from "@/lib/locations";
+import { getLocationWithStaffing, getLocations, getLocationRoleShiftTimes } from "@/lib/locations";
+import { getRoleShiftTimesForOrganization } from "@/lib/roles";
 import { getOnboardingData } from "@/app/actions/onboarding";
 import { LocationStaffingGrid } from "./staffing-grid";
+import { LocationRoleShiftTimesForm } from "./location-role-shift-times-form";
 import { DeleteLocationButton } from "./delete-location-button";
 import { CopyStaffingForm } from "./copy-staffing-form";
 
@@ -29,6 +31,10 @@ export default async function LocationDetailPage({
   const { roles } = await getOnboardingData();
   const allLocations = await getLocations(organization.id);
   const otherLocations = allLocations.filter((loc) => loc.id !== id);
+  const [roleShiftTimesMap, locationRoleShiftTimesMap] = await Promise.all([
+    getRoleShiftTimesForOrganization(organization.id),
+    getLocationRoleShiftTimes(id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -89,6 +95,13 @@ export default async function LocationDetailPage({
           staffing={location.staffing}
         />
       </div>
+
+      <LocationRoleShiftTimesForm
+        locationId={location.id}
+        roles={roles}
+        roleTimes={roleShiftTimesMap.default}
+        locationTimes={locationRoleShiftTimesMap}
+      />
     </div>
   );
 }

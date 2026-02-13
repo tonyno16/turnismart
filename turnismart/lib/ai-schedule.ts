@@ -15,7 +15,11 @@ import {
   shifts,
   schedules,
 } from "@/drizzle/schema";
-import { PERIOD_TIMES } from "./schedules";
+import {
+  getPeriodTimesForOrganization,
+  getRoleShiftTimesOverrides,
+  getLocationRoleShiftTimesOverrides,
+} from "./schedules";
 import { validateShiftAssignment } from "./schedule-validation";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -192,10 +196,12 @@ export type GeneratedShift = {
 };
 
 export async function generateScheduleWithAI(
+  organizationId: string,
   constraints: SchedulingConstraint,
   weekStart: string
 ): Promise<GeneratedShift[]> {
-  const periodTimes = Object.entries(PERIOD_TIMES).map(([p, t]) => ({
+  const orgPeriodTimes = await getPeriodTimesForOrganization(organizationId);
+  const periodTimes = Object.entries(orgPeriodTimes).map(([p, t]) => ({
     period: p,
     start: t.start,
     end: t.end,
@@ -255,13 +261,27 @@ export async function saveGeneratedShifts(
   shiftsToSave: GeneratedShift[]
 ): Promise<{ saved: number; skipped: number; errors: string[] }> {
   const weekStartDate = parseISO(weekStart);
+  const [orgPeriodTimes, roleOverrides, locationRoleOverrides] = await Promise.all([
+    getPeriodTimesForOrganization(organizationId),
+    getRoleShiftTimesOverrides(organizationId),
+    getLocationRoleShiftTimesOverrides(organizationId),
+  ]);
   const errors: string[] = [];
   let saved = 0;
   let skipped = 0;
 
   for (const s of shiftsToSave) {
     const date = format(addDays(weekStartDate, s.dayOfWeek), "yyyy-MM-dd");
-    const times = PERIOD_TIMES[s.period] ?? PERIOD_TIMES.morning;
+    const dayKey = `${s.locationId}:${s.roleId}:${s.period}:${s.dayOfWeek}`;
+    const locKey = `${s.locationId}:${s.roleId}:${s.period}`;
+    const roleDayKey = `${s.roleId}:${s.period}:${s.dayOfWeek}`;
+    const roleKey = `${s.roleId}:${s.period}`;
+    const times =
+      locationRoleOverrides.get(dayKey) ??
+      locationRoleOverrides.get(locKey) ??
+      roleOverrides.get(roleDayKey) ??
+      roleOverrides.get(roleKey) ??
+      (orgPeriodTimes[s.period] ?? orgPeriodTimes.morning);
 
     const conflict = await validateShiftAssignment({
       employeeId: s.employeeId,

@@ -38,7 +38,7 @@ export async function generateScheduleWithAIAction(
       return { ok: false, error: "Nessun fabbisogno configurato per le sedi" };
     }
 
-    const generated = await generateScheduleWithAI(constraints, weekStart);
+    const generated = await generateScheduleWithAI(organization.id, constraints, weekStart);
 
     if (mode === "fill_gaps") {
       const existingCount = 0;

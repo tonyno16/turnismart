@@ -45,10 +45,10 @@ vi.mock("next/cache", () => ({
 vi.mock("@/lib/schedules", () => ({
   getWeekSchedule: vi.fn(),
   getWeekStart: vi.fn(),
-  PERIOD_TIMES: {
-    morning: { start: "08:00", end: "14:00" },
-    evening: { start: "14:00", end: "23:00" },
-  },
+  getPeriodTimesForRole: vi.fn().mockResolvedValue({
+    start: "08:00",
+    end: "14:00",
+  }),
 }));
 vi.mock("@/lib/notifications", () => ({
   dispatchSchedulePublishedNotifications: vi.fn().mockResolvedValue(undefined),

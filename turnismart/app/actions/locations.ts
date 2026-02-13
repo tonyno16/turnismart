@@ -8,6 +8,8 @@ import {
   locations,
   staffingRequirements,
   roles,
+  locationRoleShiftTimes,
+  LOCATION_DAY_ALL,
 } from "@/drizzle/schema";
 import { requireOrganization } from "@/lib/auth";
 import { checkQuota } from "@/lib/usage";
@@ -170,4 +172,108 @@ export async function updateStaffingRequirements(
     }
   }
   revalidatePath(`/locations/${locationId}`);
+}
+
+export type LocationRoleShiftTimesInput = {
+  roleId: string;
+  dayOfWeek: number; // 0-6=specific day, 7=all days (LOCATION_DAY_ALL)
+  morning: { start: string; end: string };
+  evening: { start: string; end: string };
+};
+
+function validateTimeLoc(s: string): string {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
+  if (!m) return "08:00";
+  const h = Math.max(0, Math.min(23, parseInt(m[1], 10)));
+  const min = Math.max(0, Math.min(59, parseInt(m[2], 10)));
+  return `${h.toString().padStart(2, "0")}:${min.toString().padStart(2, "0")}`;
+}
+
+export async function updateLocationRoleShiftTimes(
+  locationId: string,
+  updates: LocationRoleShiftTimesInput[]
+): Promise<void> {
+  const { organization } = await requireOrganization();
+  const [loc] = await db
+    .select()
+    .from(locations)
+    .where(
+      and(
+        eq(locations.id, locationId),
+        eq(locations.organization_id, organization.id)
+      )
+    )
+    .limit(1);
+  if (!loc) throw new Error("Sede non trovata");
+
+  for (const u of updates) {
+    const [role] = await db
+      .select()
+      .from(roles)
+      .where(
+        and(
+          eq(roles.id, u.roleId),
+          eq(roles.organization_id, organization.id)
+        )
+      )
+      .limit(1);
+    if (!role) continue;
+
+    const dayOfWeek = u.dayOfWeek ?? LOCATION_DAY_ALL;
+    const morningStart = validateTimeLoc(u.morning.start);
+    const morningEnd = validateTimeLoc(u.morning.end);
+    const eveningStart = validateTimeLoc(u.evening.start);
+    const eveningEnd = validateTimeLoc(u.evening.end);
+
+    await db
+      .insert(locationRoleShiftTimes)
+      .values({
+        location_id: locationId,
+        role_id: u.roleId,
+        shift_period: "morning",
+        day_of_week: dayOfWeek,
+        start_time: morningStart,
+        end_time: morningEnd,
+      })
+      .onConflictDoUpdate({
+        target: [
+          locationRoleShiftTimes.location_id,
+          locationRoleShiftTimes.role_id,
+          locationRoleShiftTimes.shift_period,
+          locationRoleShiftTimes.day_of_week,
+        ],
+        set: {
+          start_time: morningStart,
+          end_time: morningEnd,
+          updated_at: new Date(),
+        },
+      });
+
+    await db
+      .insert(locationRoleShiftTimes)
+      .values({
+        location_id: locationId,
+        role_id: u.roleId,
+        shift_period: "evening",
+        day_of_week: dayOfWeek,
+        start_time: eveningStart,
+        end_time: eveningEnd,
+      })
+      .onConflictDoUpdate({
+        target: [
+          locationRoleShiftTimes.location_id,
+          locationRoleShiftTimes.role_id,
+          locationRoleShiftTimes.shift_period,
+          locationRoleShiftTimes.day_of_week,
+        ],
+        set: {
+          start_time: eveningStart,
+          end_time: eveningEnd,
+          updated_at: new Date(),
+        },
+      });
+  }
+
+  revalidatePath(`/locations/${locationId}`);
+  revalidatePath("/schedule");
 }

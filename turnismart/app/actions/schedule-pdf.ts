@@ -82,29 +82,23 @@ export async function exportSchedulePdf(
 
   if (mode === "by_location") {
     const { SchedulePDFByLocation } = await import("@/lib/schedule-pdf-document");
-    buf = Buffer.from(
-      await renderToBuffer(
-        SchedulePDFByLocation({
-          weekStart: sched.week_start_date,
-          shifts: shiftsWithNames,
-          locations: locsForPdf,
-        }) as React.ReactElement
-      )
-    );
+    const doc = SchedulePDFByLocation({
+      weekStart: sched.week_start_date,
+      shifts: shiftsWithNames,
+      locations: locsForPdf,
+    });
+    buf = Buffer.from(await renderToBuffer(doc as Parameters<typeof renderToBuffer>[0]));
   } else {
     const { SchedulePDFByEmployee } = await import("@/lib/schedule-pdf-document");
     const empsWithShifts = empRows.filter((e) =>
       shiftsWithNames.some((s) => s.employee_id === e.id)
     );
-    buf = Buffer.from(
-      await renderToBuffer(
-        SchedulePDFByEmployee({
-          weekStart: sched.week_start_date,
-          shifts: shiftsWithNames,
-          employees: empsWithShifts,
-        }) as React.ReactElement
-      )
-    );
+    const doc = SchedulePDFByEmployee({
+      weekStart: sched.week_start_date,
+      shifts: shiftsWithNames,
+      employees: empsWithShifts,
+    });
+    buf = Buffer.from(await renderToBuffer(doc as Parameters<typeof renderToBuffer>[0]));
   }
 
   const filename = `orario_${sched.week_start_date}_${mode === "by_location" ? "sede" : "dipendenti"}.pdf`;

@@ -1,5 +1,5 @@
 import { eq, and, gte, lte } from "drizzle-orm";
-import { format, addDays, startOfWeek, parseISO } from "date-fns";
+import { format, addDays, startOfWeek, parseISO, getISODay } from "date-fns";
 import { db } from "@/lib/db";
 import {
   schedules,
@@ -8,12 +8,219 @@ import {
   employees,
   locations,
   roles,
+  organizationSettings,
+  roleShiftTimes,
+  locationRoleShiftTimes,
+  DAY_ALL,
+  LOCATION_DAY_ALL,
 } from "@/drizzle/schema";
 
 export const PERIOD_TIMES: Record<string, { start: string; end: string }> = {
   morning: { start: "08:00", end: "14:00" },
   evening: { start: "14:00", end: "23:00" },
 };
+
+/** Default or org-configured period times. Used when creating new shifts. */
+export async function getPeriodTimesForOrganization(
+  organizationId: string
+): Promise<Record<string, { start: string; end: string }>> {
+  const [settings] = await db
+    .select()
+    .from(organizationSettings)
+    .where(eq(organizationSettings.organization_id, organizationId))
+    .limit(1);
+
+  const wr = (settings?.work_rules as Record<string, unknown>) ?? {};
+  const st = wr.shift_times as
+    | { morning?: { start?: string; end?: string }; evening?: { start?: string; end?: string } }
+    | undefined;
+
+  if (!st?.morning?.start || !st?.morning?.end || !st?.evening?.start || !st?.evening?.end) {
+    return PERIOD_TIMES;
+  }
+
+  return {
+    morning: { start: st.morning.start, end: st.morning.end },
+    evening: { start: st.evening.start, end: st.evening.end },
+  };
+}
+
+/** Day of week from date: 0=Mon..6=Sun (ISO) */
+export function getDayOfWeekFromDate(dateStr: string): number {
+  return getISODay(parseISO(dateStr)) - 1;
+}
+
+/** Get period times for a role (or location+role override) with fallback. Supports day-specific overrides.
+ * Lookup: (loc+role+day) > (loc+role) > (role+day) > (role) > org default. */
+export async function getPeriodTimesForRole(
+  organizationId: string,
+  roleId: string,
+  period: string,
+  locationId?: string,
+  date?: string
+): Promise<{ start: string; end: string }> {
+  const dayOfWeek = date != null ? getDayOfWeekFromDate(date) : DAY_ALL;
+
+  if (locationId) {
+    const [lrstDay] = await db
+      .select({
+        start_time: locationRoleShiftTimes.start_time,
+        end_time: locationRoleShiftTimes.end_time,
+      })
+      .from(locationRoleShiftTimes)
+      .innerJoin(locations, eq(locationRoleShiftTimes.location_id, locations.id))
+      .innerJoin(roles, eq(locationRoleShiftTimes.role_id, roles.id))
+      .where(
+        and(
+          eq(locationRoleShiftTimes.location_id, locationId),
+          eq(locationRoleShiftTimes.role_id, roleId),
+          eq(locationRoleShiftTimes.shift_period, period as "morning" | "evening"),
+          eq(locationRoleShiftTimes.day_of_week, dayOfWeek),
+          eq(locations.organization_id, organizationId),
+          eq(roles.organization_id, organizationId)
+        )
+      )
+      .limit(1);
+
+    if (lrstDay) {
+      return { start: lrstDay.start_time, end: lrstDay.end_time };
+    }
+
+    const [lrstAll] = await db
+      .select({
+        start_time: locationRoleShiftTimes.start_time,
+        end_time: locationRoleShiftTimes.end_time,
+      })
+      .from(locationRoleShiftTimes)
+      .innerJoin(locations, eq(locationRoleShiftTimes.location_id, locations.id))
+      .innerJoin(roles, eq(locationRoleShiftTimes.role_id, roles.id))
+      .where(
+        and(
+          eq(locationRoleShiftTimes.location_id, locationId),
+          eq(locationRoleShiftTimes.role_id, roleId),
+          eq(locationRoleShiftTimes.shift_period, period as "morning" | "evening"),
+          eq(locationRoleShiftTimes.day_of_week, LOCATION_DAY_ALL),
+          eq(locations.organization_id, organizationId),
+          eq(roles.organization_id, organizationId)
+        )
+      )
+      .limit(1);
+
+    if (lrstAll) {
+      return { start: lrstAll.start_time, end: lrstAll.end_time };
+    }
+  }
+
+  const [rstDay] = await db
+    .select({
+      start_time: roleShiftTimes.start_time,
+      end_time: roleShiftTimes.end_time,
+    })
+    .from(roleShiftTimes)
+    .innerJoin(roles, eq(roleShiftTimes.role_id, roles.id))
+    .where(
+      and(
+        eq(roleShiftTimes.role_id, roleId),
+        eq(roleShiftTimes.shift_period, period as "morning" | "evening"),
+        eq(roleShiftTimes.day_of_week, dayOfWeek),
+        eq(roles.organization_id, organizationId)
+      )
+    )
+    .limit(1);
+
+  if (rstDay) {
+    return { start: rstDay.start_time, end: rstDay.end_time };
+  }
+
+  const [rstAll] = await db
+    .select({
+      start_time: roleShiftTimes.start_time,
+      end_time: roleShiftTimes.end_time,
+    })
+    .from(roleShiftTimes)
+    .innerJoin(roles, eq(roleShiftTimes.role_id, roles.id))
+    .where(
+      and(
+        eq(roleShiftTimes.role_id, roleId),
+        eq(roleShiftTimes.shift_period, period as "morning" | "evening"),
+        eq(roleShiftTimes.day_of_week, DAY_ALL),
+        eq(roles.organization_id, organizationId)
+      )
+    )
+    .limit(1);
+
+  if (rstAll) {
+    return { start: rstAll.start_time, end: rstAll.end_time };
+  }
+
+  const orgTimes = await getPeriodTimesForOrganization(organizationId);
+  return orgTimes[period] ?? orgTimes.morning;
+}
+
+/** Batch: get role override times for an org. Key = `${roleId}:${period}` (day 7) or `${roleId}:${period}:${day}`. */
+export async function getRoleShiftTimesOverrides(
+  organizationId: string
+): Promise<Map<string, { start: string; end: string }>> {
+  const map = new Map<string, { start: string; end: string }>();
+
+  const rows = await db
+    .select({
+      role_id: roleShiftTimes.role_id,
+      shift_period: roleShiftTimes.shift_period,
+      day_of_week: roleShiftTimes.day_of_week,
+      start_time: roleShiftTimes.start_time,
+      end_time: roleShiftTimes.end_time,
+    })
+    .from(roleShiftTimes)
+    .innerJoin(roles, eq(roleShiftTimes.role_id, roles.id))
+    .where(eq(roles.organization_id, organizationId));
+
+  for (const r of rows) {
+    const key =
+      r.day_of_week === DAY_ALL
+        ? `${r.role_id}:${r.shift_period}`
+        : `${r.role_id}:${r.shift_period}:${r.day_of_week}`;
+    map.set(key, { start: r.start_time, end: r.end_time });
+  }
+
+  return map;
+}
+
+/** Batch: get location+role override times. Key = `${locId}:${roleId}:${period}` (day 7) or `...:${day}`. */
+export async function getLocationRoleShiftTimesOverrides(
+  organizationId: string
+): Promise<Map<string, { start: string; end: string }>> {
+  const map = new Map<string, { start: string; end: string }>();
+
+  const rows = await db
+    .select({
+      location_id: locationRoleShiftTimes.location_id,
+      role_id: locationRoleShiftTimes.role_id,
+      shift_period: locationRoleShiftTimes.shift_period,
+      day_of_week: locationRoleShiftTimes.day_of_week,
+      start_time: locationRoleShiftTimes.start_time,
+      end_time: locationRoleShiftTimes.end_time,
+    })
+    .from(locationRoleShiftTimes)
+    .innerJoin(locations, eq(locationRoleShiftTimes.location_id, locations.id))
+    .innerJoin(roles, eq(locationRoleShiftTimes.role_id, roles.id))
+    .where(
+      and(
+        eq(locations.organization_id, organizationId),
+        eq(roles.organization_id, organizationId)
+      )
+    );
+
+  for (const r of rows) {
+    const key =
+      r.day_of_week === LOCATION_DAY_ALL
+        ? `${r.location_id}:${r.role_id}:${r.shift_period}`
+        : `${r.location_id}:${r.role_id}:${r.shift_period}:${r.day_of_week}`;
+    map.set(key, { start: r.start_time, end: r.end_time });
+  }
+
+  return map;
+}
 
 /** Get week start (Monday) for a date string YYYY-MM-DD */
 export function getWeekStart(dateStr: string): string {

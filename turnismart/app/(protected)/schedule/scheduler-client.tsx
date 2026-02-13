@@ -14,7 +14,7 @@ import {
 import { format, addWeeks, addDays, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { toast } from "sonner";
-import { createShift, deleteShift, publishSchedule, updateShiftNotes, duplicateShift } from "@/app/actions/shifts";
+import { createShift, deleteShift, publishSchedule, updateShift, updateShiftNotes, duplicateShift } from "@/app/actions/shifts";
 import { ReplicateWeekModal } from "@/components/schedule/replicate-week-modal";
 import { SaveTemplateModal } from "@/components/schedule/save-template-modal";
 import { ApplyTemplateModal } from "@/components/schedule/apply-template-modal";
@@ -113,6 +113,12 @@ export function SchedulerClient({
     role_name: string;
     employee_name: string;
   } | null>(null);
+  const [timesEditConflict, setTimesEditConflict] = useState<{
+    shiftId: string;
+    startTime: string;
+    endTime: string;
+    message: string;
+  } | null>(null);
   const [filters, setFilters] = useState<SchedulerFiltersState>({
     roleId: "",
     preferredLocationId: "",
@@ -121,7 +127,12 @@ export function SchedulerClient({
   const [viewMode, setViewMode] = useState<"location" | "employee" | "role">("location");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!actionsOpen) return;
@@ -329,6 +340,29 @@ export function SchedulerClient({
       startTransition(async () => {
         const result = await updateShiftNotes(shiftId, notes);
         if (result.ok) router.refresh();
+      });
+    },
+    [router, startTransition]
+  );
+
+  const handleUpdateTimes = useCallback(
+    (shiftId: string, startTime: string, endTime: string, force = false) => {
+      startTransition(async () => {
+        const fd = new FormData();
+        fd.set("startTime", startTime);
+        fd.set("endTime", endTime);
+        const result = await updateShift(shiftId, fd, force);
+        if (result.ok) {
+          setTimesEditConflict(null);
+          router.refresh();
+        } else if (result.ok === false && "conflict" in result) {
+          setTimesEditConflict({
+            shiftId,
+            startTime,
+            endTime,
+            message: result.conflict.message,
+          });
+        }
       });
     },
     [router, startTransition]
@@ -615,6 +649,11 @@ export function SchedulerClient({
               </div>
             </>
           )}
+          {!isMounted ? (
+            <div className="flex min-w-0 flex-1 items-center justify-center overflow-auto">
+              <p className="text-sm text-zinc-500">Caricamento programmazione...</p>
+            </div>
+          ) : (
           <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
             <div className="flex min-w-0 flex-1 overflow-auto [-webkit-overflow-scrolling:touch]">
               <div className="min-w-[800px]">
@@ -701,6 +740,7 @@ export function SchedulerClient({
                                         onDelete={handleDeleteShift}
                                         onFindSubstitute={handleFindSubstitute}
                                         onUpdateNotes={handleUpdateNotes}
+                                        onUpdateTimes={handleUpdateTimes}
                                         onDuplicate={handleDuplicateShift}
                                       />
                                     );
@@ -885,6 +925,7 @@ export function SchedulerClient({
               ) : null}
             </DragOverlay>
           </DndContext>
+          )}
         </div>
       </div>
 
@@ -939,6 +980,22 @@ export function SchedulerClient({
           pending={pending}
         />
       )}
+      {timesEditConflict && (
+        <ConflictPopup
+          message={timesEditConflict.message}
+          onAssignAnyway={() =>
+            handleUpdateTimes(
+              timesEditConflict.shiftId,
+              timesEditConflict.startTime,
+              timesEditConflict.endTime,
+              true
+            )
+          }
+          onCancel={() => setTimesEditConflict(null)}
+          pending={pending}
+          confirmLabel="Salva comunque"
+        />
+      )}
     </div>
   );
 }
@@ -955,6 +1012,7 @@ const ShiftCell = memo(function ShiftCell({
   onDelete,
   onFindSubstitute,
   onUpdateNotes,
+  onUpdateTimes,
   onDuplicate,
 }: {
   locationId: string;
@@ -968,6 +1026,7 @@ const ShiftCell = memo(function ShiftCell({
   onDelete: (id: string) => void;
   onFindSubstitute: (shift: { id: string; date: string; location_name: string; role_name: string; employee_name: string }) => void;
   onUpdateNotes: (id: string, notes: string | null) => void;
+  onUpdateTimes?: (shiftId: string, startTime: string, endTime: string) => void;
   onDuplicate: (shiftId: string, targetDate: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -991,6 +1050,7 @@ const ShiftCell = memo(function ShiftCell({
             onDelete={onDelete}
             onFindSubstitute={onFindSubstitute}
             onUpdateNotes={onUpdateNotes}
+            onUpdateTimes={onUpdateTimes}
             onDuplicate={onDuplicate}
           />
         ))}

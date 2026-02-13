@@ -5,11 +5,13 @@ export function ConflictPopup({
   onAssignAnyway,
   onCancel,
   pending,
+  confirmLabel = "Assegna comunque",
 }: {
   message: string;
   onAssignAnyway: () => void;
   onCancel: () => void;
   pending: boolean;
+  confirmLabel?: string;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -31,7 +33,7 @@ export function ConflictPopup({
             disabled={pending}
             className="rounded-lg bg-amber-600 px-4 py-2 text-sm text-white hover:bg-amber-700 disabled:opacity-50"
           >
-            {pending ? "..." : "Assegna comunque"}
+            {pending ? "..." : confirmLabel}
           </button>
         </div>
       </div>

@@ -13,7 +13,7 @@ import {
   roles,
 } from "@/drizzle/schema";
 import { requireOrganization } from "@/lib/auth";
-import { getWeekSchedule, getWeekStart, PERIOD_TIMES } from "@/lib/schedules";
+import { getWeekSchedule, getWeekStart, getPeriodTimesForRole } from "@/lib/schedules";
 import { dispatchSchedulePublishedNotifications } from "@/lib/notifications";
 import {
   validateShiftAssignment,
@@ -52,7 +52,13 @@ export async function createShift(
     .limit(1);
   if (!sched) throw new Error("Programmazione non trovata");
 
-  const times = PERIOD_TIMES[shiftPeriod] ?? PERIOD_TIMES.morning;
+  const times = await getPeriodTimesForRole(
+    organization.id,
+    roleId,
+    shiftPeriod,
+    locationId,
+    date
+  );
   const startTime = times.start;
   const endTime = times.end;
   const weekStart = sched.week_start_date;
@@ -144,7 +150,7 @@ export async function updateShift(
     })
     .where(eq(shifts.id, shiftId));
   revalidatePath("/schedule");
-  return { ok: true };
+  return { ok: true } as const;
 }
 
 export async function updateShiftNotes(

@@ -9,7 +9,19 @@ export type WorkRulesInput = {
   min_rest_between_shifts_hours: number;
   max_consecutive_days: number;
   overtime_threshold_hours: number;
+  shift_times: {
+    morning: { start: string; end: string };
+    evening: { start: string; end: string };
+  };
 };
+
+function validateTime(s: string): string {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(s.trim());
+  if (!m) return "08:00";
+  const h = Math.max(0, Math.min(23, parseInt(m[1], 10)));
+  const min = Math.max(0, Math.min(59, parseInt(m[2], 10)));
+  return `${h.toString().padStart(2, "0")}:${min.toString().padStart(2, "0")}`;
+}
 
 export async function updateWorkRules(data: WorkRulesInput) {
   const { user, organization } = await requireOrganization();
@@ -24,6 +36,16 @@ export async function updateWorkRules(data: WorkRulesInput) {
     min_rest_between_shifts_hours: Math.max(0, Math.min(24, data.min_rest_between_shifts_hours)),
     max_consecutive_days: Math.max(1, Math.min(14, data.max_consecutive_days)),
     overtime_threshold_hours: Math.max(1, Math.min(80, data.overtime_threshold_hours)),
+    shift_times: {
+      morning: {
+        start: validateTime(data.shift_times.morning.start),
+        end: validateTime(data.shift_times.morning.end),
+      },
+      evening: {
+        start: validateTime(data.shift_times.evening.start),
+        end: validateTime(data.shift_times.evening.end),
+      },
+    },
   };
 
   if (settings) {

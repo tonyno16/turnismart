@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { format, addDays, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
-import { FileText, Copy } from "lucide-react";
+import { FileText, Copy, Clock } from "lucide-react";
 
 /** Subset di shift usato da ShiftCard; compatibile con il tipo Shift dello scheduler */
 type ShiftForCard = {
@@ -23,6 +23,7 @@ export function ShiftCard({
   onDelete,
   onFindSubstitute,
   onUpdateNotes,
+  onUpdateTimes,
   onDuplicate,
 }: {
   shift: ShiftForCard;
@@ -30,10 +31,14 @@ export function ShiftCard({
   onDelete: (id: string) => void;
   onFindSubstitute: (shift: ShiftForCard) => void;
   onUpdateNotes: (id: string, notes: string | null) => void;
+  onUpdateTimes?: (id: string, startTime: string, endTime: string) => void;
   onDuplicate: (shiftId: string, targetDate: string) => void;
 }) {
   const [showNotePopover, setShowNotePopover] = useState(false);
   const [showDuplicateMenu, setShowDuplicateMenu] = useState(false);
+  const [showTimesPopover, setShowTimesPopover] = useState(false);
+  const [startDraft, setStartDraft] = useState(shift.start_time.slice(0, 5));
+  const [endDraft, setEndDraft] = useState(shift.end_time.slice(0, 5));
   const [noteDraft, setNoteDraft] = useState(shift.notes ?? "");
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -42,23 +47,41 @@ export function ShiftCard({
   }, [shift.notes]);
 
   useEffect(() => {
-    if (!showNotePopover && !showDuplicateMenu) return;
+    if (showTimesPopover) {
+      setStartDraft(shift.start_time.slice(0, 5));
+      setEndDraft(shift.end_time.slice(0, 5));
+    }
+  }, [showTimesPopover, shift.start_time, shift.end_time]);
+
+  useEffect(() => {
+    if (!showNotePopover && !showDuplicateMenu && !showTimesPopover) return;
     const onClick = (e: MouseEvent) => {
       const target = e.target as Node;
       if (cardRef.current?.contains(target)) return;
       setShowNotePopover(false);
       setShowDuplicateMenu(false);
+      setShowTimesPopover(false);
     };
     const id = setTimeout(() => document.addEventListener("click", onClick), 0);
     return () => {
       clearTimeout(id);
       document.removeEventListener("click", onClick);
     };
-  }, [showNotePopover, showDuplicateMenu]);
+  }, [showNotePopover, showDuplicateMenu, showTimesPopover]);
 
   const handleSaveNote = () => {
     onUpdateNotes(shift.id, noteDraft.trim() || null);
     setShowNotePopover(false);
+  };
+
+  const handleSaveTimes = () => {
+    if (!onUpdateTimes) return;
+    const start = startDraft.length === 5 ? startDraft : `${startDraft}:00`.slice(0, 5);
+    const end = endDraft.length === 5 ? endDraft : `${endDraft}:00`.slice(0, 5);
+    if (start && end) {
+      onUpdateTimes(shift.id, start, end);
+      setShowTimesPopover(false);
+    }
   };
 
   const weekDates = Array.from({ length: 7 }, (_, i) =>
@@ -83,6 +106,62 @@ export function ShiftCard({
         {timeStr}
       </div>
       <div className="absolute right-1 top-1 flex items-center gap-0.5 rounded bg-white/90 opacity-0 shadow-sm group-hover:opacity-100 dark:bg-zinc-800/90">
+        {onUpdateTimes && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowTimesPopover(!showTimesPopover);
+                setShowNotePopover(false);
+                setShowDuplicateMenu(false);
+              }}
+              className="rounded p-0.5 hover:bg-[hsl(var(--primary))]/30"
+              title="Modifica orari"
+              aria-label="Modifica orari turno"
+            >
+              <Clock className="h-3.5 w-3.5" />
+            </button>
+            {showTimesPopover && (
+              <div
+                className="absolute left-0 top-full z-50 mt-1 w-40 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="mb-2 flex items-center gap-2">
+                  <input
+                    type="time"
+                    value={startDraft}
+                    onChange={(e) => setStartDraft(e.target.value)}
+                    className="w-full rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-900"
+                  />
+                  <span className="text-zinc-400">–</span>
+                  <input
+                    type="time"
+                    value={endDraft}
+                    onChange={(e) => setEndDraft(e.target.value)}
+                    className="w-full rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-900"
+                  />
+                </div>
+                <div className="flex justify-end gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowTimesPopover(false)}
+                    className="rounded px-2 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-700"
+                  >
+                    Annulla
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveTimes}
+                    className="rounded bg-[hsl(var(--primary))] px-2 py-1 text-xs text-white hover:opacity-90"
+                  >
+                    Salva
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <div className="relative">
           <button
             type="button"

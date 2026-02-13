@@ -8,9 +8,11 @@ import { employeeTimeOff } from "./employee-time-off";
 import { employees } from "./employees";
 import { importJobs } from "./import-jobs";
 import { invitations } from "./invitations";
+import { locationRoleShiftTimes } from "./location-role-shift-times";
 import { locations } from "./locations";
 import { organizationSettings } from "./organization-settings";
 import { organizations } from "./organizations";
+import { roleShiftTimes } from "./role-shift-times";
 import { roles } from "./roles";
 import { scheduleGenerationJobs } from "./schedule-generation-jobs";
 import { notificationJobs } from "./notification-jobs";
@@ -38,7 +40,9 @@ export {
   accountantClientStatuses,
   type AccountantClientStatus,
 } from "./accountant-clients";
+export { locationRoleShiftTimes, LOCATION_DAY_ALL } from "./location-role-shift-times";
 export { locations } from "./locations";
+export { roleShiftTimes, DAY_ALL } from "./role-shift-times";
 export { roles } from "./roles";
 export {
   staffingRequirements,
@@ -148,12 +152,27 @@ export const locationsRelations = relations(locations, ({ one, many }) => ({
   organization: one(organizations),
   staffingRequirements: many(staffingRequirements),
   employees: many(employees),
+  locationRoleShiftTimes: many(locationRoleShiftTimes),
 }));
+
+export const locationRoleShiftTimesRelations = relations(
+  locationRoleShiftTimes,
+  ({ one }) => ({
+    location: one(locations),
+    role: one(roles),
+  })
+);
 
 export const rolesRelations = relations(roles, ({ one, many }) => ({
   organization: one(organizations),
   staffingRequirements: many(staffingRequirements),
   employeeRoles: many(employeeRoles),
+  roleShiftTimes: many(roleShiftTimes),
+  locationRoleShiftTimes: many(locationRoleShiftTimes),
+}));
+
+export const roleShiftTimesRelations = relations(roleShiftTimes, ({ one }) => ({
+  role: one(roles),
 }));
 
 export const staffingRequirementsRelations = relations(
