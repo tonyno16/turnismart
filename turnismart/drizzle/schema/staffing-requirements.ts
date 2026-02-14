@@ -5,6 +5,7 @@ import {
   timestamp,
   uuid,
   unique,
+  index,
 } from "drizzle-orm/pg-core";
 import { locations } from "./locations";
 import { roles } from "./roles";
@@ -41,5 +42,6 @@ export const staffingRequirements = pgTable(
       t.day_of_week,
       t.shift_period
     ),
+    index("idx_staffing_req_location").on(t.location_id),
   ]
 );

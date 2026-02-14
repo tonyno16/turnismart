@@ -451,6 +451,7 @@ export function SchedulerClient({
 
   const handleDeleteShift = useCallback(
     (shiftId: string) => {
+      if (shiftId.startsWith("temp-")) return; // optimistic placeholder — skip server call
       startTransition(async () => {
         dispatchOptimistic({ type: "delete", shiftId });
         await deleteShift(shiftId);

@@ -1,4 +1,4 @@
-import { pgTable, integer, numeric, timestamp, uuid, unique } from "drizzle-orm/pg-core";
+import { pgTable, integer, numeric, timestamp, uuid, unique, index } from "drizzle-orm/pg-core";
 import { employees } from "./employees";
 import { roles } from "./roles";
 
@@ -20,5 +20,8 @@ export const employeeRoles = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (t) => [unique("employee_roles_emp_role_unique").on(t.employee_id, t.role_id)]
+  (t) => [
+    unique("employee_roles_emp_role_unique").on(t.employee_id, t.role_id),
+    index("idx_employee_roles_employee").on(t.employee_id),
+  ]
 );
