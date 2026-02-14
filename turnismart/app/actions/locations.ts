@@ -1,12 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gte, lte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import {
   locations,
   staffingRequirements,
+  dailyStaffingOverrides,
   roles,
   locationRoleShiftTimes,
   LOCATION_DAY_ALL,
@@ -272,6 +273,135 @@ export async function updateLocationRoleShiftTimes(
           updated_at: new Date(),
         },
       });
+  }
+
+  revalidatePath(`/locations/${locationId}`);
+  revalidatePath("/schedule");
+}
+
+/* ---------- Daily staffing overrides (monthly calendar) ---------- */
+
+export async function getDailyStaffingForMonth(
+  locationId: string,
+  month: string // "YYYY-MM"
+) {
+  const { organization } = await requireOrganization();
+  const [loc] = await db
+    .select()
+    .from(locations)
+    .where(
+      and(
+        eq(locations.id, locationId),
+        eq(locations.organization_id, organization.id)
+      )
+    )
+    .limit(1);
+  if (!loc) throw new Error("Sede non trovata");
+
+  const firstDay = `${month}-01`;
+  // Compute last day of month
+  const [y, m] = month.split("-").map(Number);
+  const lastDay = `${month}-${new Date(y, m, 0).getDate().toString().padStart(2, "0")}`;
+
+  const rows = await db
+    .select({
+      id: dailyStaffingOverrides.id,
+      role_id: dailyStaffingOverrides.role_id,
+      date: dailyStaffingOverrides.date,
+      shift_period: dailyStaffingOverrides.shift_period,
+      required_count: dailyStaffingOverrides.required_count,
+    })
+    .from(dailyStaffingOverrides)
+    .where(
+      and(
+        eq(dailyStaffingOverrides.location_id, locationId),
+        gte(dailyStaffingOverrides.date, firstDay),
+        lte(dailyStaffingOverrides.date, lastDay)
+      )
+    );
+
+  return rows;
+}
+
+export async function updateDailyStaffingOverrides(
+  locationId: string,
+  month: string, // "YYYY-MM"
+  updates: Array<{
+    roleId: string;
+    date: string; // "YYYY-MM-DD"
+    shiftPeriod: string;
+    requiredCount: number;
+  }>
+) {
+  const { organization } = await requireOrganization();
+  const [loc] = await db
+    .select()
+    .from(locations)
+    .where(
+      and(
+        eq(locations.id, locationId),
+        eq(locations.organization_id, organization.id)
+      )
+    )
+    .limit(1);
+  if (!loc) throw new Error("Sede non trovata");
+
+  // Validate all dates belong to the specified month
+  for (const u of updates) {
+    if (!u.date.startsWith(month)) {
+      throw new Error(`Data ${u.date} non appartiene al mese ${month}`);
+    }
+  }
+
+  const firstDay = `${month}-01`;
+  const [y, m] = month.split("-").map(Number);
+  const lastDay = `${month}-${new Date(y, m, 0).getDate().toString().padStart(2, "0")}`;
+
+  // Delete all existing overrides for this location + month
+  await db
+    .delete(dailyStaffingOverrides)
+    .where(
+      and(
+        eq(dailyStaffingOverrides.location_id, locationId),
+        gte(dailyStaffingOverrides.date, firstDay),
+        lte(dailyStaffingOverrides.date, lastDay)
+      )
+    );
+
+  // Insert only rows that actually differ from the weekly template
+  // Load current weekly template for comparison
+  const weeklyTemplate = await db
+    .select()
+    .from(staffingRequirements)
+    .where(eq(staffingRequirements.location_id, locationId));
+
+  const templateMap = new Map<string, number>();
+  for (const t of weeklyTemplate) {
+    templateMap.set(
+      `${t.role_id}_${t.day_of_week}_${t.shift_period}`,
+      t.required_count
+    );
+  }
+
+  for (const u of updates) {
+    // Compute day_of_week for this date (0=Mon..6=Sun)
+    const d = new Date(u.date + "T00:00:00");
+    const jsDay = d.getUTCDay(); // 0=Sun..6=Sat
+    const dayOfWeek = jsDay === 0 ? 6 : jsDay - 1; // → 0=Mon..6=Sun
+
+    const templateKey = `${u.roleId}_${dayOfWeek}_${u.shiftPeriod}`;
+    const templateCount = templateMap.get(templateKey) ?? 0;
+
+    // Only store if different from template
+    if (u.requiredCount !== templateCount) {
+      await db.insert(dailyStaffingOverrides).values({
+        location_id: locationId,
+        role_id: u.roleId,
+        date: u.date,
+        shift_period: u.shiftPeriod as "morning" | "evening",
+        required_count: u.requiredCount,
+      });
+    }
   }
 
   revalidatePath(`/locations/${locationId}`);

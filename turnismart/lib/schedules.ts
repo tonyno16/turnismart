@@ -6,6 +6,7 @@ import {
   schedules,
   shifts,
   staffingRequirements,
+  dailyStaffingOverrides,
   employees,
   locations,
   roles,
@@ -379,12 +380,14 @@ export type CoverageSlot = {
   assigned: number;
 };
 
-/** Get staffing coverage: required vs assigned per (location, role, day, period) */
+/** Get staffing coverage: required vs assigned per (location, role, day, period).
+ *  Daily overrides take priority over weekly template. */
 export async function getStaffingCoverage(
   organizationId: string,
   weekStart: string,
   scheduleId?: string
 ): Promise<CoverageSlot[]> {
+  // 1. Weekly template (recurring pattern)
   const reqs = await db
     .select({
       location_id: staffingRequirements.location_id,
@@ -400,6 +403,47 @@ export async function getStaffingCoverage(
     .innerJoin(roles, eq(staffingRequirements.role_id, roles.id))
     .where(eq(locations.organization_id, organizationId));
 
+  // 2. Compute the 7 dates for this week
+  const weekStartDate = parseISO(weekStart);
+  const weekDates: string[] = Array.from({ length: 7 }, (_, i) =>
+    format(addDays(weekStartDate, i), "yyyy-MM-dd")
+  );
+  const weekEndDate = weekDates[6];
+
+  // 3. Fetch daily overrides for these 7 dates (all org locations)
+  const orgLocationIds = [...new Set(reqs.map((r) => r.location_id))];
+  let overrideMap = new Map<string, number>(); // key: locId_roleId_dayOfWeek_period
+  if (orgLocationIds.length > 0) {
+    const overrides = await db
+      .select({
+        location_id: dailyStaffingOverrides.location_id,
+        role_id: dailyStaffingOverrides.role_id,
+        date: dailyStaffingOverrides.date,
+        shift_period: dailyStaffingOverrides.shift_period,
+        required_count: dailyStaffingOverrides.required_count,
+      })
+      .from(dailyStaffingOverrides)
+      .innerJoin(locations, eq(dailyStaffingOverrides.location_id, locations.id))
+      .where(
+        and(
+          eq(locations.organization_id, organizationId),
+          gte(dailyStaffingOverrides.date, weekStart),
+          lte(dailyStaffingOverrides.date, weekEndDate)
+        )
+      );
+
+    for (const o of overrides) {
+      const dayIdx = weekDates.indexOf(o.date);
+      if (dayIdx >= 0) {
+        overrideMap.set(
+          `${o.location_id}_${o.role_id}_${dayIdx}_${o.shift_period}`,
+          o.required_count
+        );
+      }
+    }
+  }
+
+  // 4. Resolve schedule
   let schedId = scheduleId;
   if (!schedId) {
     const [s] = await db
@@ -415,18 +459,23 @@ export async function getStaffingCoverage(
     schedId = s?.id;
   }
   if (!schedId) {
-    return reqs.map((r) => ({
-      locationId: r.location_id,
-      locationName: r.location_name,
-      roleId: r.role_id,
-      roleName: r.role_name,
-      dayOfWeek: r.day_of_week,
-      shiftPeriod: r.shift_period,
-      required: r.required_count,
-      assigned: 0,
-    }));
+    return reqs.map((r) => {
+      const key = `${r.location_id}_${r.role_id}_${r.day_of_week}_${r.shift_period}`;
+      const overrideCount = overrideMap.get(key);
+      return {
+        locationId: r.location_id,
+        locationName: r.location_name,
+        roleId: r.role_id,
+        roleName: r.role_name,
+        dayOfWeek: r.day_of_week,
+        shiftPeriod: r.shift_period,
+        required: overrideCount !== undefined ? overrideCount : r.required_count,
+        assigned: 0,
+      };
+    });
   }
 
+  // 5. Count assigned shifts
   const assignedShifts = await db
     .select({
       location_id: shifts.location_id,
@@ -437,9 +486,8 @@ export async function getStaffingCoverage(
     .from(shifts)
     .where(
       and(eq(shifts.schedule_id, schedId), eq(shifts.status, "active"))
-  );
+    );
 
-  const weekStartDate = parseISO(weekStart);
   const toDayAndPeriod = (dateStr: string, startTime: string) => {
     const d = parseISO(dateStr);
     const dayNum = Math.floor(
@@ -457,9 +505,11 @@ export async function getStaffingCoverage(
     countMap.set(key, (countMap.get(key) ?? 0) + 1);
   }
 
+  // 6. Merge: override > template, count assigned
   return reqs.map((r) => {
     const key = `${r.location_id}_${r.role_id}_${r.day_of_week}_${r.shift_period}`;
     const assigned = countMap.get(key) ?? 0;
+    const overrideCount = overrideMap.get(key);
     return {
       locationId: r.location_id,
       locationName: r.location_name,
@@ -467,7 +517,7 @@ export async function getStaffingCoverage(
       roleName: r.role_name,
       dayOfWeek: r.day_of_week,
       shiftPeriod: r.shift_period,
-      required: r.required_count,
+      required: overrideCount !== undefined ? overrideCount : r.required_count,
       assigned,
     };
   });
