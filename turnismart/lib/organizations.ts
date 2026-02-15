@@ -1,15 +1,17 @@
+import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { organizations } from "@/drizzle/schema";
 
-export async function getOrganization(id: string) {
+/** Cached per-request: layout + page child won't re-query the same org. */
+export const getOrganization = cache(async (id: string) => {
   const [org] = await db
     .select()
     .from(organizations)
     .where(eq(organizations.id, id))
     .limit(1);
   return org ?? null;
-}
+});
 
 export async function getOrganizationBySlug(slug: string) {
   const [org] = await db

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
@@ -78,18 +79,15 @@ async function provisionUser(authUser: User, organizationId: string): Promise<vo
 export type CurrentUser = Awaited<ReturnType<typeof getCurrentUser>> extends Promise<infer T> ? T : never;
 export type CurrentOrganization = Awaited<ReturnType<typeof getCurrentOrganization>> extends Promise<infer T> ? T : never;
 
-/** Returns Supabase auth user or null. Use to detect stale sessions. */
-export async function getSupabaseUser() {
+/** Returns Supabase auth user or null. Cached per-request via React.cache(). */
+export const getSupabaseUser = cache(async () => {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   return user;
-}
+});
 
-export async function getCurrentUser() {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
+export const getCurrentUser = cache(async () => {
+  const authUser = await getSupabaseUser();
 
   if (!authUser) return null;
 
@@ -141,7 +139,7 @@ export async function getCurrentUser() {
     is_active: appUser.is_active,
     organization_id: appUser.organization_id,
   };
-}
+});
 
 export async function getCurrentOrganization() {
   const user = await getCurrentUser();
