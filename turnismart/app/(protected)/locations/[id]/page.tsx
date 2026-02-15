@@ -1,19 +1,17 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { format } from "date-fns";
 import { requireOrganization } from "@/lib/auth";
 import { getLocationWithStaffing, getLocations, getLocationRoleShiftTimes } from "@/lib/locations";
 import { getRoleShiftTimesForOrganization } from "@/lib/roles";
 import { getOnboardingData } from "@/app/actions/onboarding";
+import { getDailyStaffingForMonth } from "@/app/actions/locations";
 import { LocationStaffingGrid } from "./staffing-grid";
+import { MonthlyStaffingGrid } from "./monthly-staffing-grid";
+import { StaffingTabs } from "./staffing-tabs";
 import { LocationRoleShiftTimesForm } from "./location-role-shift-times-form";
 import { DeleteLocationButton } from "./delete-location-button";
 import { CopyStaffingForm } from "./copy-staffing-form";
-
-const DAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
-const PERIODS = [
-  { id: "morning", label: "M" },
-  { id: "evening", label: "S" },
-];
 
 export default async function LocationDetailPage({
   params,
@@ -31,10 +29,13 @@ export default async function LocationDetailPage({
   const { roles } = await getOnboardingData();
   const allLocations = await getLocations(organization.id);
   const otherLocations = allLocations.filter((loc) => loc.id !== id);
-  const [roleShiftTimesMap, locationRoleShiftTimesMap] = await Promise.all([
-    getRoleShiftTimesForOrganization(organization.id),
-    getLocationRoleShiftTimes(id),
-  ]);
+  const currentMonth = format(new Date(), "yyyy-MM");
+  const [roleShiftTimesMap, locationRoleShiftTimesMap, monthlyOverrides] =
+    await Promise.all([
+      getRoleShiftTimesForOrganization(organization.id),
+      getLocationRoleShiftTimes(id),
+      getDailyStaffingForMonth(id, currentMonth),
+    ]);
 
   return (
     <div className="space-y-6">
@@ -89,10 +90,23 @@ export default async function LocationDetailPage({
             />
           </div>
         )}
-        <LocationStaffingGrid
-          locationId={location.id}
-          roles={roles}
-          initialStaffing={location.staffing}
+        <StaffingTabs
+          weeklyTab={
+            <LocationStaffingGrid
+              locationId={location.id}
+              roles={roles}
+              initialStaffing={location.staffing}
+            />
+          }
+          monthlyTab={
+            <MonthlyStaffingGrid
+              locationId={location.id}
+              roles={roles}
+              weeklyStaffing={location.staffing}
+              initialOverrides={monthlyOverrides}
+              initialMonth={currentMonth}
+            />
+          }
         />
       </div>
 

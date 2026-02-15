@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeRedirectPath } from "@/lib/url";
 import { NextResponse } from "next/server";
 
 /** POST /api/auth/login - Route Handler ensures cookies are set correctly (Server Actions may fail). */
@@ -6,7 +7,7 @@ export async function POST(request: Request) {
   const formData = await request.formData();
   const email = (formData.get("email") as string)?.trim();
   const password = formData.get("password") as string;
-  const redirectTo = (formData.get("redirectTo") as string) || "/dashboard";
+  const redirectTo = sanitizeRedirectPath(formData.get("redirectTo") as string);
 
   const baseUrl = new URL(request.url).origin;
 

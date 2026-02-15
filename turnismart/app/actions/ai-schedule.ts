@@ -39,12 +39,12 @@ export async function generateScheduleWithAIAction(
       return { ok: false, error: "Nessun fabbisogno configurato per le sedi" };
     }
 
-    let generated = await generateScheduleWithAI(organization.id, constraints, weekStart);
-
     const nameToId = new Map(
       constraints.employees.map((e) => [e.name.toLowerCase().trim(), e.id])
     );
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    let generated = await generateScheduleWithAI(organization.id, constraints, weekStart);
     generated = generated.map((s) => {
       if (!uuidRegex.test(s.employeeId)) {
         const resolved = nameToId.get(String(s.employeeId).toLowerCase().trim());
@@ -52,17 +52,6 @@ export async function generateScheduleWithAIAction(
       }
       return s;
     });
-
-    if (mode === "fill_gaps") {
-      const existingCount = 0;
-      if (existingCount > 0) {
-        return {
-          ok: false,
-          error:
-            "Modalità 'Riempi gap' non ancora supportata. Usa 'Genera tutto'.",
-        };
-      }
-    }
 
     const result = await saveGeneratedShifts(
       organization.id,

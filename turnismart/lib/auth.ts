@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
@@ -60,14 +61,14 @@ async function provisionUser(authUser: User, organizationId: string): Promise<vo
         .where(eq(users.email, authUser.email!))
         .limit(1);
       if (existing && existing.id !== authUser.id) {
-        await db.delete(users).where(eq(users.id, existing.id));
-        await db.insert(users).values({
-          id: authUser.id,
-          email: authUser.email!,
-          full_name: authUser.user_metadata?.full_name ?? existing.full_name,
-          organization_id: existing.organization_id ?? organizationId,
-          role: existing.role,
-        });
+        // Update auth ID without deleting, preserving FK references
+        await db
+          .update(users)
+          .set({
+            id: authUser.id,
+            full_name: authUser.user_metadata?.full_name ?? existing.full_name,
+          })
+          .where(eq(users.id, existing.id));
         return;
       }
     }
@@ -78,18 +79,15 @@ async function provisionUser(authUser: User, organizationId: string): Promise<vo
 export type CurrentUser = Awaited<ReturnType<typeof getCurrentUser>> extends Promise<infer T> ? T : never;
 export type CurrentOrganization = Awaited<ReturnType<typeof getCurrentOrganization>> extends Promise<infer T> ? T : never;
 
-/** Returns Supabase auth user or null. Use to detect stale sessions. */
-export async function getSupabaseUser() {
+/** Returns Supabase auth user or null. Cached per-request via React.cache(). */
+export const getSupabaseUser = cache(async () => {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   return user;
-}
+});
 
-export async function getCurrentUser() {
-  const supabase = await createClient();
-  const {
-    data: { user: authUser },
-  } = await supabase.auth.getUser();
+export const getCurrentUser = cache(async () => {
+  const authUser = await getSupabaseUser();
 
   if (!authUser) return null;
 
@@ -101,8 +99,6 @@ export async function getCurrentUser() {
       .where(eq(users.id, authUser.id))
       .limit(1);
   } catch (e) {
-    const cause = e && typeof e === "object" && "cause" in e ? (e as { cause?: unknown }).cause : e;
-    console.error("[Auth] Query users failed. Cause:", cause);
     throw e;
   }
 
@@ -127,10 +123,7 @@ export async function getCurrentUser() {
         .from(users)
         .where(eq(users.id, authUser.id))
         .limit(1);
-      if (!appUser) {
-        console.error("Auth: provision user failed", e);
-        return null;
-      }
+      if (!appUser) return null;
     }
   }
 
@@ -146,7 +139,7 @@ export async function getCurrentUser() {
     is_active: appUser.is_active,
     organization_id: appUser.organization_id,
   };
-}
+});
 
 export async function getCurrentOrganization() {
   const user = await getCurrentUser();

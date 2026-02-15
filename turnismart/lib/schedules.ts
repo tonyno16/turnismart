@@ -1,10 +1,13 @@
 import { eq, and, gte, lte, isNull } from "drizzle-orm";
 import { format, addDays, startOfWeek, parseISO, getISODay } from "date-fns";
 import { db } from "@/lib/db";
+import { parseTimeMinutes } from "@/lib/time-utils";
+import { dailyTableExists } from "@/lib/daily-table-check";
 import {
   schedules,
   shifts,
   staffingRequirements,
+  dailyStaffingOverrides,
   employees,
   locations,
   roles,
@@ -226,6 +229,34 @@ export async function getLocationRoleShiftTimesOverrides(
   return map;
 }
 
+/** Resolve period times from pre-loaded maps (in-memory cascade).
+ * Lookup: (loc+role+day) > (loc+role) > (role+day) > (role) > orgDefaults. */
+export function resolvePeriodTimesFromMaps(
+  roleOverrides: Map<string, { start: string; end: string }>,
+  locationOverrides: Map<string, { start: string; end: string }>,
+  orgDefaults: Record<string, { start: string; end: string }>,
+  roleId: string,
+  period: string,
+  locationId?: string,
+  dayOfWeek?: number
+): { start: string; end: string } {
+  if (locationId && dayOfWeek != null) {
+    const locDay = locationOverrides.get(`${locationId}:${roleId}:${period}:${dayOfWeek}`);
+    if (locDay) return locDay;
+  }
+  if (locationId) {
+    const locAll = locationOverrides.get(`${locationId}:${roleId}:${period}`);
+    if (locAll) return locAll;
+  }
+  if (dayOfWeek != null) {
+    const roleDay = roleOverrides.get(`${roleId}:${period}:${dayOfWeek}`);
+    if (roleDay) return roleDay;
+  }
+  const roleAll = roleOverrides.get(`${roleId}:${period}`);
+  if (roleAll) return roleAll;
+  return orgDefaults[period] ?? orgDefaults.morning;
+}
+
 /** Get week start (Monday) for a date string YYYY-MM-DD */
 export function getWeekStart(dateStr: string): string {
   const d = parseISO(dateStr);
@@ -358,7 +389,8 @@ export type CoverageSlot = {
 };
 
 /** Get staffing coverage: required vs assigned per (location, role, day, period).
- * Usa override per weekStart se esiste, altrimenti modello ricorrente. */
+ * Usa override settimanale se esiste, altrimenti modello ricorrente.
+ * I daily overrides hanno priorità sul template settimanale. */
 export async function getStaffingCoverage(
   organizationId: string,
   weekStart: string,
@@ -407,15 +439,57 @@ export async function getStaffingCoverage(
 
   const overrideKey = (r: { location_id: string; role_id: string; day_of_week: number; shift_period: string }) =>
     `${r.location_id}_${r.role_id}_${r.day_of_week}_${r.shift_period}`;
-  const overrideMap = new Map(overrideRows.map((r) => [overrideKey(r), r]));
+  const weeklyOverrideMap = new Map(overrideRows.map((r) => [overrideKey(r), r]));
   const templateKeys = new Set(templateRows.map((t) => overrideKey(t)));
   const mergedFromTemplate =
     templateRows.length > 0
-      ? templateRows.map((t) => overrideMap.get(overrideKey(t)) ?? t)
+      ? templateRows.map((t) => weeklyOverrideMap.get(overrideKey(t)) ?? t)
       : [];
   const overrideOnly = overrideRows.filter((o) => !templateKeys.has(overrideKey(o)));
   const reqs = [...mergedFromTemplate, ...overrideOnly];
 
+  // 2. Compute the 7 dates for this week
+  const weekStartDate = parseISO(weekStart);
+  const weekDates: string[] = Array.from({ length: 7 }, (_, i) =>
+    format(addDays(weekStartDate, i), "yyyy-MM-dd")
+  );
+  const weekEndDate = weekDates[6];
+
+  // 3. Fetch daily overrides for these 7 dates (all org locations)
+  // Skipped entirely if migration 0023 hasn't been applied yet
+  const orgLocationIds = [...new Set(reqs.map((r) => r.location_id))];
+  let overrideMap = new Map<string, number>(); // key: locId_roleId_dayOfWeek_period
+  if (orgLocationIds.length > 0 && (await dailyTableExists())) {
+    const overrides = await db
+      .select({
+        location_id: dailyStaffingOverrides.location_id,
+        role_id: dailyStaffingOverrides.role_id,
+        date: dailyStaffingOverrides.date,
+        shift_period: dailyStaffingOverrides.shift_period,
+        required_count: dailyStaffingOverrides.required_count,
+      })
+      .from(dailyStaffingOverrides)
+      .innerJoin(locations, eq(dailyStaffingOverrides.location_id, locations.id))
+      .where(
+        and(
+          eq(locations.organization_id, organizationId),
+          gte(dailyStaffingOverrides.date, weekStart),
+          lte(dailyStaffingOverrides.date, weekEndDate)
+        )
+      );
+
+    for (const o of overrides) {
+      const dayIdx = weekDates.indexOf(o.date);
+      if (dayIdx >= 0) {
+        overrideMap.set(
+          `${o.location_id}_${o.role_id}_${dayIdx}_${o.shift_period}`,
+          o.required_count
+        );
+      }
+    }
+  }
+
+  // 4. Resolve schedule
   let schedId = scheduleId;
   if (!schedId) {
     const [s] = await db
@@ -431,18 +505,23 @@ export async function getStaffingCoverage(
     schedId = s?.id;
   }
   if (!schedId) {
-    return reqs.map((r) => ({
-      locationId: r.location_id,
-      locationName: r.location_name,
-      roleId: r.role_id,
-      roleName: r.role_name,
-      dayOfWeek: r.day_of_week,
-      shiftPeriod: r.shift_period,
-      required: r.required_count,
-      assigned: 0,
-    }));
+    return reqs.map((r) => {
+      const key = `${r.location_id}_${r.role_id}_${r.day_of_week}_${r.shift_period}`;
+      const overrideCount = overrideMap.get(key);
+      return {
+        locationId: r.location_id,
+        locationName: r.location_name,
+        roleId: r.role_id,
+        roleName: r.role_name,
+        dayOfWeek: r.day_of_week,
+        shiftPeriod: r.shift_period,
+        required: overrideCount !== undefined ? overrideCount : r.required_count,
+        assigned: 0,
+      };
+    });
   }
 
+  // 5. Count assigned shifts
   const assignedShifts = await db
     .select({
       location_id: shifts.location_id,
@@ -453,9 +532,8 @@ export async function getStaffingCoverage(
     .from(shifts)
     .where(
       and(eq(shifts.schedule_id, schedId), eq(shifts.status, "active"))
-  );
+    );
 
-  const weekStartDate = parseISO(weekStart);
   const toDayAndPeriod = (dateStr: string, startTime: string) => {
     const d = parseISO(dateStr);
     const dayNum = Math.floor(
@@ -473,9 +551,11 @@ export async function getStaffingCoverage(
     countMap.set(key, (countMap.get(key) ?? 0) + 1);
   }
 
+  // 6. Merge: override > template, count assigned
   return reqs.map((r) => {
     const key = `${r.location_id}_${r.role_id}_${r.day_of_week}_${r.shift_period}`;
     const assigned = countMap.get(key) ?? 0;
+    const overrideCount = overrideMap.get(key);
     return {
       locationId: r.location_id,
       locationName: r.location_name,
@@ -483,7 +563,7 @@ export async function getStaffingCoverage(
       roleName: r.role_name,
       dayOfWeek: r.day_of_week,
       shiftPeriod: r.shift_period,
-      required: r.required_count,
+      required: overrideCount !== undefined ? overrideCount : r.required_count,
       assigned,
     };
   });
@@ -497,19 +577,24 @@ export type WeekStats = {
 
 export async function getWeekStats(
   organizationId: string,
-  weekStart: string
+  weekStart: string,
+  scheduleId?: string
 ): Promise<WeekStats> {
-  const [sched] = await db
-    .select({ id: schedules.id })
-    .from(schedules)
-    .where(
-      and(
-        eq(schedules.organization_id, organizationId),
-        eq(schedules.week_start_date, weekStart)
+  let schedId = scheduleId;
+  if (!schedId) {
+    const [sched] = await db
+      .select({ id: schedules.id })
+      .from(schedules)
+      .where(
+        and(
+          eq(schedules.organization_id, organizationId),
+          eq(schedules.week_start_date, weekStart)
+        )
       )
-    )
-    .limit(1);
-  if (!sched) {
+      .limit(1);
+    schedId = sched?.id;
+  }
+  if (!schedId) {
     return { totalShifts: 0, totalHours: 0, employeesScheduled: 0 };
   }
 
@@ -522,7 +607,7 @@ export async function getWeekStats(
     })
     .from(shifts)
     .where(
-      and(eq(shifts.schedule_id, sched.id), eq(shifts.status, "active"))
+      and(eq(shifts.schedule_id, schedId), eq(shifts.status, "active"))
   );
 
   let totalMinutes = 0;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo, useCallback, memo, useRef, useEffect } from "react";
+import { useState, useTransition, useMemo, useCallback, useDeferredValue, useOptimistic, memo, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import Link from "next/link";
@@ -130,6 +130,25 @@ export function SchedulerClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
+
+  // Optimistic shift state — updates instantly before server confirms
+  type ShiftAction =
+    | { type: "delete"; shiftId: string }
+    | { type: "add"; shift: Shift };
+  const [optimisticShifts, dispatchOptimistic] = useOptimistic(
+    shifts,
+    (state: Shift[], action: ShiftAction) => {
+      switch (action.type) {
+        case "delete":
+          return state.filter((s) => s.id !== action.shiftId);
+        case "add":
+          return [...state, action.shift];
+        default:
+          return state;
+      }
+    }
+  );
+
   const [activeEmployee, setActiveEmployee] = useState<Employee | null>(null);
   const [conflict, setConflict] = useState<{
     message: string;
@@ -139,11 +158,8 @@ export function SchedulerClient({
     period: string;
     employeeId: string;
   } | null>(null);
-  const [showAIModal, setShowAIModal] = useState(false);
-  const [showReplicateModal, setShowReplicateModal] = useState(false);
-  const [showSaveTemplateModal, setShowSaveTemplateModal] = useState(false);
-  const [showApplyTemplateModal, setShowApplyTemplateModal] = useState(false);
-  const [showExportPdfModal, setShowExportPdfModal] = useState(false);
+  type ModalId = "ai" | "replicate" | "saveTemplate" | "applyTemplate" | "exportPdf" | null;
+  const [activeModal, setActiveModal] = useState<ModalId>(null);
   const [sickLeaveShift, setSickLeaveShift] = useState<{
     id: string;
     date: string;
@@ -162,9 +178,11 @@ export function SchedulerClient({
     preferredLocationId: "",
     onlyUncovered: false,
   });
+  const deferredFilters = useDeferredValue(filters);
   const [viewMode, setViewMode] = useState<"location" | "employee" | "role">("location");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
   const gridScrollRef = useRef<HTMLDivElement>(null);
@@ -186,25 +204,24 @@ export function SchedulerClient({
 
   const filteredEmployees = useMemo(() => {
     let list = employees;
-    if (filters.roleId) {
-      const roleIds = employeeRoleIds[filters.roleId] ? [filters.roleId] : [];
+    if (deferredFilters.roleId) {
       const withRole = new Set(
         Object.entries(employeeRoleIds)
-          .filter(([, ids]) => ids.includes(filters.roleId))
+          .filter(([, ids]) => ids.includes(deferredFilters.roleId))
           .map(([eid]) => eid)
       );
       list = list.filter((e) => withRole.has(e.id));
     }
-    if (filters.preferredLocationId) {
-      list = list.filter((e) => e.preferred_location_id === filters.preferredLocationId);
+    if (deferredFilters.preferredLocationId) {
+      list = list.filter((e) => e.preferred_location_id === deferredFilters.preferredLocationId);
     }
     return list;
-  }, [employees, filters.roleId, filters.preferredLocationId, employeeRoleIds]);
+  }, [employees, deferredFilters.roleId, deferredFilters.preferredLocationId, employeeRoleIds]);
 
   // Pre-index shifts by cell key for O(1) lookup
   const shiftIndex = useMemo(() => {
     const index = new Map<string, Shift[]>();
-    for (const s of shifts) {
+    for (const s of optimisticShifts) {
       if (s.status !== "active") continue;
       const period = s.start_time >= "14:00" ? "evening" : "morning";
       const key = `${s.location_id}:${s.role_id}:${s.date}:${period}`;
@@ -213,7 +230,7 @@ export function SchedulerClient({
       else index.set(key, [s]);
     }
     return index;
-  }, [shifts]);
+  }, [optimisticShifts]);
 
   // Pre-index coverage by cell key for O(1) lookup
   const coverageIndex = useMemo(() => {
@@ -250,11 +267,29 @@ export function SchedulerClient({
     const dropData = String(over.id);
     if (!dropData.startsWith("cell:")) return;
     const [, locationId, roleId, dayStr, period] = dropData.split(":");
-    const d = parseISO(weekStart);
-    const cellDate = addDays(d, parseInt(dayStr, 10));
-    const dateStr = format(cellDate, "yyyy-MM-dd");
+    const dateStr = weekDates[parseInt(dayStr, 10)];
+
+    const emp = employees.find((e) => e.id === employeeId);
+    const loc = locations.find((l) => l.id === locationId);
+    const role = roles.find((r) => r.id === roleId);
 
     startTransition(async () => {
+      // Optimistic: add a placeholder shift immediately
+      const tempShift: Shift = {
+        id: `temp-${Date.now()}`,
+        location_id: locationId,
+        location_name: loc?.name ?? "",
+        employee_id: employeeId,
+        employee_name: emp ? `${emp.first_name} ${emp.last_name}` : "",
+        role_id: roleId,
+        role_name: role?.name ?? "",
+        date: dateStr,
+        start_time: period === "morning" ? "06:00" : "14:00",
+        end_time: period === "morning" ? "14:00" : "22:00",
+        status: "active",
+      };
+      dispatchOptimistic({ type: "add", shift: tempShift });
+
       const result = await createShift(
         schedule.id,
         locationId,
@@ -296,19 +331,22 @@ export function SchedulerClient({
     });
   };
 
+  // Pre-compute date strings for the week — avoids 140+ parseISO/addDays/format calls per render
+  const weekDates = useMemo(() => {
+    const start = parseISO(weekStart);
+    return Array.from({ length: 7 }, (_, i) => format(addDays(start, i), "yyyy-MM-dd"));
+  }, [weekStart]);
+
   const getShiftsInCell = useCallback(
     (locationId: string, roleId: string, day: number, period: string) => {
-      const d = parseISO(weekStart);
-      const cellDate = addDays(d, day);
-      const dateStr = format(cellDate, "yyyy-MM-dd");
-      const key = `${locationId}:${roleId}:${dateStr}:${period}`;
+      const key = `${locationId}:${roleId}:${weekDates[day]}:${period}`;
       return shiftIndex.get(key) ?? [];
     },
-    [weekStart, shiftIndex]
+    [weekDates, shiftIndex]
   );
 
   const filteredLocationRoleRows = useMemo(() => {
-    if (!filters.onlyUncovered) {
+    if (!deferredFilters.onlyUncovered) {
       return locations.flatMap((loc, locIndex) =>
         roles.map((role) => ({ locationId: loc.id, locationName: loc.name, roleId: role.id, roleName: role.name, locationIndex: locIndex }))
       );
@@ -317,18 +355,18 @@ export function SchedulerClient({
       roles
         .map((role) => {
           let hasUncovered = false;
-          for (let day = 0; day < 7; day++) {
-            const d = parseISO(weekStart);
-            const cellDate = addDays(d, day);
-            const dateStr = format(cellDate, "yyyy-MM-dd");
+          outer: for (let day = 0; day < 7; day++) {
             for (const period of ["morning", "evening"]) {
               const covKey = `${loc.id}:${role.id}:${day}:${period}`;
               const cov = coverageIndex.get(covKey);
               const required = cov?.required ?? 0;
               if (required > 0) {
-                const key = `${loc.id}:${role.id}:${dateStr}:${period}`;
+                const key = `${loc.id}:${role.id}:${weekDates[day]}:${period}`;
                 const shiftsHere = shiftIndex.get(key) ?? [];
-                if (shiftsHere.length < required) hasUncovered = true;
+                if (shiftsHere.length < required) {
+                  hasUncovered = true;
+                  break outer;
+                }
               }
             }
           }
@@ -337,18 +375,18 @@ export function SchedulerClient({
         .filter((r) => r.hasUncovered)
         .map(({ hasUncovered: _, ...r }) => r)
     );
-  }, [locations, roles, filters.onlyUncovered, coverageIndex, shiftIndex, weekStart]);
+  }, [locations, roles, deferredFilters.onlyUncovered, coverageIndex, shiftIndex, weekDates]);
 
   const shiftsByEmployeeSlot = useMemo(() => {
     const index = new Map<string, Shift>();
-    for (const s of shifts) {
+    for (const s of optimisticShifts) {
       if (s.status !== "active") continue;
       const period = s.start_time >= "14:00" ? "evening" : "morning";
       const key = `${s.employee_id}:${s.date}:${period}`;
       index.set(key, s);
     }
     return index;
-  }, [shifts]);
+  }, [optimisticShifts]);
 
   const employeesByRole = useMemo(() => {
     const map = new Map<string, Employee[]>();
@@ -447,12 +485,14 @@ export function SchedulerClient({
 
   const handleDeleteShift = useCallback(
     (shiftId: string) => {
+      if (shiftId.startsWith("temp-")) return; // optimistic placeholder — skip server call
       startTransition(async () => {
+        dispatchOptimistic({ type: "delete", shiftId });
         await deleteShift(shiftId);
         router.refresh();
       });
     },
-    [router, startTransition]
+    [router, startTransition, dispatchOptimistic]
   );
 
   const handleDeleteAllShifts = useCallback(() => {
@@ -622,43 +662,43 @@ export function SchedulerClient({
                 {actionsOpen && (
                   <div className="absolute left-0 top-full z-20 mt-1 w-48 rounded-lg border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-800">
                     <button
-                      onClick={() => { setShowReplicateModal(true); setActionsOpen(false); }}
+                      onClick={() => { setActiveModal("replicate"); setActionsOpen(false); }}
                       disabled={pending}
                       className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50"
                     >
                       Replica settimana prec.
                     </button>
                     <button
-                      onClick={() => { setShowSaveTemplateModal(true); setActionsOpen(false); }}
+                      onClick={() => { setActiveModal("saveTemplate"); setActionsOpen(false); }}
                       disabled={pending}
                       className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50"
                     >
                       Salva template
                     </button>
                     <button
-                      onClick={() => { setShowApplyTemplateModal(true); setActionsOpen(false); }}
+                      onClick={() => { setActiveModal("applyTemplate"); setActionsOpen(false); }}
                       disabled={pending}
                       className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50"
                     >
                       Applica template
                     </button>
                     <button
-                      onClick={() => { setShowExportPdfModal(true); setActionsOpen(false); }}
+                      onClick={() => { setActiveModal("exportPdf"); setActionsOpen(false); }}
                       disabled={pending}
                       className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50"
                     >
                       Esporta PDF
                     </button>
                     <button
-                      onClick={() => { setShowAIModal(true); setActionsOpen(false); }}
+                      onClick={() => { setActiveModal("ai"); setActionsOpen(false); }}
                       className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700"
                     >
                       Genera con AI
                     </button>
                     <button
-                      onClick={() => { handleDeleteAllShifts(); setActionsOpen(false); }}
+                      onClick={() => { setShowDeleteAll(true); setActionsOpen(false); }}
                       disabled={pending || stats.totalShifts === 0}
-                      className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50"
+                      className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30 disabled:opacity-50"
                     >
                       Elimina tutti i turni
                     </button>
@@ -668,28 +708,35 @@ export function SchedulerClient({
               {/* Bottoni azioni visibili da md in su */}
               <div className="hidden md:flex md:flex-wrap md:items-center md:gap-2">
                 <button
-                  onClick={() => setShowReplicateModal(true)}
+                  onClick={() => setActiveModal("replicate")}
                   disabled={pending}
                   className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
                 >
                   Replica
                 </button>
                 <button
-                  onClick={() => setShowSaveTemplateModal(true)}
+                  onClick={() => setActiveModal("saveTemplate")}
                   disabled={pending}
                   className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
                 >
                   Template
                 </button>
                 <button
-                  onClick={() => setShowExportPdfModal(true)}
+                  onClick={() => setActiveModal("exportPdf")}
                   disabled={pending}
                   className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
                 >
                   PDF
                 </button>
                 <button
-                  onClick={() => setShowAIModal(true)}
+                  onClick={() => setShowDeleteAll(true)}
+                  disabled={pending || stats.totalShifts === 0}
+                  className="rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950/30 disabled:opacity-50"
+                >
+                  Elimina tutti
+                </button>
+                <button
+                  onClick={() => setActiveModal("ai")}
                   className="flex items-center gap-1.5 rounded-lg border border-[hsl(var(--primary))] px-3 py-2 text-sm font-medium text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/10"
                 >
                   <svg
@@ -770,6 +817,44 @@ export function SchedulerClient({
           </span>
         </div>
 
+        {/* Empty state — nessun turno nella settimana */}
+        {stats.totalShifts === 0 && (
+          <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-50/50 px-6 py-10 text-center dark:border-zinc-600 dark:bg-zinc-800/30">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-10 w-10 text-zinc-400">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+            </svg>
+            <p className="text-base font-medium text-zinc-700 dark:text-zinc-300">
+              Nessun turno programmato per questa settimana
+            </p>
+            <p className="text-sm text-zinc-500">
+              Trascina un dipendente dalla sidebar, oppure usa un metodo rapido:
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <button
+                onClick={() => setActiveModal("replicate")}
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-700"
+              >
+                Replica settimana prec.
+              </button>
+              <button
+                onClick={() => setActiveModal("applyTemplate")}
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-700"
+              >
+                Applica template
+              </button>
+              <button
+                onClick={() => setActiveModal("ai")}
+                className="flex items-center gap-1.5 rounded-lg border border-[hsl(var(--primary))] px-3 py-2 text-sm font-medium text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/10"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z" />
+                </svg>
+                Genera con AI
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="relative mt-2 flex min-h-0 flex-1 overflow-auto [-webkit-overflow-scrolling:touch]">
           {/* Toggle dipendenti su mobile/tablet (< lg) */}
           {viewMode === "location" && (
@@ -804,7 +889,7 @@ export function SchedulerClient({
                     ✕
                   </button>
                 </div>
-                <EmployeeSidebar employees={filteredEmployees} shifts={shifts} weekStart={weekStart} roles={roles} employeeRoleIds={employeeRoleIds} />
+                <EmployeeSidebar employees={filteredEmployees} shifts={optimisticShifts} weekStart={weekStart} roles={roles} employeeRoleIds={employeeRoleIds} />
               </div>
             </>
           )}
@@ -1271,7 +1356,7 @@ export function SchedulerClient({
                   Vista sola lettura. Passa a &quot;Per sede&quot; per assegnare.
                 </p>
               )}
-              <EmployeeSidebar employees={filteredEmployees} shifts={shifts} weekStart={weekStart} roles={roles} employeeRoleIds={employeeRoleIds} />
+              <EmployeeSidebar employees={filteredEmployees} shifts={optimisticShifts} weekStart={weekStart} roles={roles} employeeRoleIds={employeeRoleIds} />
             </div>
 
             <DragOverlay>
@@ -1286,35 +1371,35 @@ export function SchedulerClient({
         </div>
       </div>
 
-      {showAIModal && (
+      {activeModal === "ai" && (
         <AIGenerationModal
           weekStart={weekStart}
-          onClose={() => setShowAIModal(false)}
+          onClose={() => setActiveModal(null)}
         />
       )}
-      {showReplicateModal && (
+      {activeModal === "replicate" && (
         <ReplicateWeekModal
           scheduleId={schedule.id}
           weekStart={weekStart}
-          onClose={() => setShowReplicateModal(false)}
+          onClose={() => setActiveModal(null)}
         />
       )}
-      {showSaveTemplateModal && (
+      {activeModal === "saveTemplate" && (
         <SaveTemplateModal
           scheduleId={schedule.id}
-          onClose={() => setShowSaveTemplateModal(false)}
+          onClose={() => setActiveModal(null)}
         />
       )}
-      {showApplyTemplateModal && (
+      {activeModal === "applyTemplate" && (
         <ApplyTemplateModal
           weekStart={weekStart}
-          onClose={() => setShowApplyTemplateModal(false)}
+          onClose={() => setActiveModal(null)}
         />
       )}
-      {showExportPdfModal && (
+      {activeModal === "exportPdf" && (
         <ExportPdfModal
           scheduleId={schedule.id}
-          onClose={() => setShowExportPdfModal(false)}
+          onClose={() => setActiveModal(null)}
         />
       )}
       {sickLeaveShift && (
@@ -1352,6 +1437,50 @@ export function SchedulerClient({
           pending={pending}
           confirmLabel="Salva comunque"
         />
+      )}
+      {/* Modal conferma elimina tutti i turni */}
+      {showDeleteAll && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-800">
+            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              Elimina tutti i turni
+            </h3>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              Eliminare tutti i <strong>{stats.totalShifts} turni</strong> della settimana{" "}
+              {format(parseISO(weekStart), "d MMM", { locale: it })} –{" "}
+              {format(addDays(parseISO(weekStart), 6), "d MMM yyyy", { locale: it })}?
+            </p>
+            <p className="mt-1 text-xs text-red-500">
+              Questa azione non è reversibile.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setShowDeleteAll(false)}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-700"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={() => {
+                  setShowDeleteAll(false);
+                  startTransition(async () => {
+                    try {
+                      const { deleted } = await deleteAllShifts(schedule.id);
+                      toast.success(`${deleted} turni eliminati`);
+                      router.refresh();
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Errore eliminazione");
+                    }
+                  });
+                }}
+                disabled={pending}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                Elimina tutti
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

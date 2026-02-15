@@ -23,9 +23,10 @@ export default async function SchedulePage({
       getEmployeeRoleIdsForOrganization(organization.id),
     ]);
 
+  // These depend on schedule.id — run in parallel after first batch
   const [coverage, stats] = await Promise.all([
     getStaffingCoverage(organization.id, weekStart, schedule.id),
-    getWeekStats(organization.id, weekStart),
+    getWeekStats(organization.id, weekStart, schedule.id),
   ]);
 
   return (

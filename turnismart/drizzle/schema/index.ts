@@ -25,6 +25,7 @@ import { schedules } from "./schedules";
 import { shifts } from "./shifts";
 import { shiftRequests } from "./shift-requests";
 import { staffingRequirements } from "./staffing-requirements";
+import { dailyStaffingOverrides } from "./daily-staffing-overrides";
 import { usageTracking } from "./usage-tracking";
 import { users } from "./users";
 
@@ -49,6 +50,7 @@ export {
   shiftPeriods,
   type ShiftPeriod,
 } from "./staffing-requirements";
+export { dailyStaffingOverrides } from "./daily-staffing-overrides";
 export { organizationSettings } from "./organization-settings";
 export { employees, contractTypes, type ContractType } from "./employees";
 export { employeeRoles } from "./employee-roles";
@@ -151,6 +153,7 @@ export const accountantClientsRelations = relations(
 export const locationsRelations = relations(locations, ({ one, many }) => ({
   organization: one(organizations),
   staffingRequirements: many(staffingRequirements),
+  dailyStaffingOverrides: many(dailyStaffingOverrides),
   employees: many(employees),
   locationRoleShiftTimes: many(locationRoleShiftTimes),
 }));
@@ -166,6 +169,7 @@ export const locationRoleShiftTimesRelations = relations(
 export const rolesRelations = relations(roles, ({ one, many }) => ({
   organization: one(organizations),
   staffingRequirements: many(staffingRequirements),
+  dailyStaffingOverrides: many(dailyStaffingOverrides),
   employeeRoles: many(employeeRoles),
   roleShiftTimes: many(roleShiftTimes),
   locationRoleShiftTimes: many(locationRoleShiftTimes),
@@ -177,6 +181,14 @@ export const roleShiftTimesRelations = relations(roleShiftTimes, ({ one }) => ({
 
 export const staffingRequirementsRelations = relations(
   staffingRequirements,
+  ({ one }) => ({
+    location: one(locations),
+    role: one(roles),
+  })
+);
+
+export const dailyStaffingOverridesRelations = relations(
+  dailyStaffingOverrides,
   ({ one }) => ({
     location: one(locations),
     role: one(roles),

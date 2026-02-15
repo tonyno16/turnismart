@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect, memo, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, memo, useMemo } from "react";
 import { format, addDays, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { FileText, Copy, Clock, AlertTriangle } from "lucide-react";
+import { useClickOutside } from "@/hooks/use-click-outside";
+
+type ActivePopover = "notes" | "times" | "duplicate" | null;
 
 /** Subset di shift usato da ShiftCard; compatibile con il tipo Shift dello scheduler */
 type ShiftForCard = {
@@ -36,44 +39,51 @@ export const ShiftCard = memo(function ShiftCard({
   onUpdateTimes?: (id: string, startTime: string, endTime: string) => void;
   onDuplicate: (shiftId: string, targetDate: string) => void;
 }) {
-  const [showNotePopover, setShowNotePopover] = useState(false);
-  const [showDuplicateMenu, setShowDuplicateMenu] = useState(false);
-  const [showTimesPopover, setShowTimesPopover] = useState(false);
+  const [activePopover, setActivePopover] = useState<ActivePopover>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [startDraft, setStartDraft] = useState(shift.start_time.slice(0, 5));
   const [endDraft, setEndDraft] = useState(shift.end_time.slice(0, 5));
   const [noteDraft, setNoteDraft] = useState(shift.notes ?? "");
   const cardRef = useRef<HTMLDivElement>(null);
+
+  const closePopover = useCallback(() => setActivePopover(null), []);
+  useClickOutside(cardRef, closePopover, activePopover !== null);
+
+  // Reset confirm-delete timer on unmount
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    };
+  }, []);
+
+  const handleDeleteClick = useCallback(() => {
+    if (confirmDelete) {
+      // Second click → actually delete
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+      setConfirmDelete(false);
+      onDelete(shift.id);
+    } else {
+      // First click → enter confirm mode (3s timeout)
+      setConfirmDelete(true);
+      confirmTimerRef.current = setTimeout(() => setConfirmDelete(false), 3000);
+    }
+  }, [confirmDelete, onDelete, shift.id]);
 
   useEffect(() => {
     setNoteDraft(shift.notes ?? "");
   }, [shift.notes]);
 
   useEffect(() => {
-    if (showTimesPopover) {
+    if (activePopover === "times") {
       setStartDraft(shift.start_time.slice(0, 5));
       setEndDraft(shift.end_time.slice(0, 5));
     }
-  }, [showTimesPopover, shift.start_time, shift.end_time]);
-
-  useEffect(() => {
-    if (!showNotePopover && !showDuplicateMenu && !showTimesPopover) return;
-    const onClick = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (cardRef.current?.contains(target)) return;
-      setShowNotePopover(false);
-      setShowDuplicateMenu(false);
-      setShowTimesPopover(false);
-    };
-    const id = setTimeout(() => document.addEventListener("click", onClick), 0);
-    return () => {
-      clearTimeout(id);
-      document.removeEventListener("click", onClick);
-    };
-  }, [showNotePopover, showDuplicateMenu, showTimesPopover]);
+  }, [activePopover, shift.start_time, shift.end_time]);
 
   const handleSaveNote = () => {
     onUpdateNotes(shift.id, noteDraft.trim() || null);
-    setShowNotePopover(false);
+    setActivePopover(null);
   };
 
   const handleSaveTimes = () => {
@@ -82,7 +92,7 @@ export const ShiftCard = memo(function ShiftCard({
     const end = endDraft.length === 5 ? endDraft : `${endDraft}:00`.slice(0, 5);
     if (start && end) {
       onUpdateTimes(shift.id, start, end);
-      setShowTimesPopover(false);
+      setActivePopover(null);
     }
   };
 
@@ -126,9 +136,7 @@ export const ShiftCard = memo(function ShiftCard({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setShowTimesPopover(!showTimesPopover);
-                setShowNotePopover(false);
-                setShowDuplicateMenu(false);
+                setActivePopover(activePopover === "times" ? null : "times");
               }}
               className="rounded p-0.5 hover:bg-[hsl(var(--primary))]/30"
               title="Modifica orari"
@@ -136,7 +144,7 @@ export const ShiftCard = memo(function ShiftCard({
             >
               <Clock className="h-3.5 w-3.5" />
             </button>
-            {showTimesPopover && (
+            {activePopover === "times" && (
               <div
                 className="absolute left-0 top-full z-50 mt-1 w-40 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
                 onClick={(e) => e.stopPropagation()}
@@ -144,6 +152,7 @@ export const ShiftCard = memo(function ShiftCard({
                 <div className="mb-2 flex items-center gap-2">
                   <input
                     type="time"
+                    aria-label="Ora inizio turno"
                     value={startDraft}
                     onChange={(e) => setStartDraft(e.target.value)}
                     className="w-full rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-900"
@@ -151,6 +160,7 @@ export const ShiftCard = memo(function ShiftCard({
                   <span className="text-zinc-400">–</span>
                   <input
                     type="time"
+                    aria-label="Ora fine turno"
                     value={endDraft}
                     onChange={(e) => setEndDraft(e.target.value)}
                     className="w-full rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-900"
@@ -159,7 +169,7 @@ export const ShiftCard = memo(function ShiftCard({
                 <div className="flex justify-end gap-1">
                   <button
                     type="button"
-                    onClick={() => setShowTimesPopover(false)}
+                    onClick={() => setActivePopover(null)}
                     className="rounded px-2 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-700"
                   >
                     Annulla
@@ -181,8 +191,7 @@ export const ShiftCard = memo(function ShiftCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setShowNotePopover(!showNotePopover);
-              setShowDuplicateMenu(false);
+              setActivePopover(activePopover === "notes" ? null : "notes");
             }}
             className="rounded p-0.5 hover:bg-[hsl(var(--primary))]/30"
             title="Note"
@@ -190,7 +199,7 @@ export const ShiftCard = memo(function ShiftCard({
           >
             <FileText className="h-3.5 w-3.5" />
           </button>
-          {showNotePopover && (
+          {activePopover === "notes" && (
             <div
               className="absolute left-0 top-full z-50 mt-1 w-48 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
               onClick={(e) => e.stopPropagation()}
@@ -206,7 +215,7 @@ export const ShiftCard = memo(function ShiftCard({
               <div className="flex justify-end gap-1">
                 <button
                   type="button"
-                  onClick={() => setShowNotePopover(false)}
+                  onClick={() => setActivePopover(null)}
                   className="rounded px-2 py-1 text-xs hover:bg-zinc-100 dark:hover:bg-zinc-700"
                 >
                   Annulla
@@ -227,8 +236,7 @@ export const ShiftCard = memo(function ShiftCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setShowDuplicateMenu(!showDuplicateMenu);
-              setShowNotePopover(false);
+              setActivePopover(activePopover === "duplicate" ? null : "duplicate");
             }}
             className="rounded p-0.5 hover:bg-[hsl(var(--primary))]/30"
             title="Duplica"
@@ -236,7 +244,7 @@ export const ShiftCard = memo(function ShiftCard({
           >
             <Copy className="h-3.5 w-3.5" />
           </button>
-          {showDuplicateMenu && (
+          {activePopover === "duplicate" && (
             <div
               className="absolute right-0 top-full z-50 mt-1 w-36 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
               onClick={(e) => e.stopPropagation()}
@@ -252,7 +260,7 @@ export const ShiftCard = memo(function ShiftCard({
                     type="button"
                     onClick={() => {
                       onDuplicate(shift.id, d);
-                      setShowDuplicateMenu(false);
+                      setActivePopover(null);
                     }}
                     className="block w-full px-2 py-1.5 text-left text-xs hover:bg-zinc-100 dark:hover:bg-zinc-700"
                   >
@@ -278,12 +286,16 @@ export const ShiftCard = memo(function ShiftCard({
           </svg>
         </button>
         <button
-          onClick={() => onDelete(shift.id)}
-          className="rounded p-0.5 hover:bg-red-500/30"
-          title="Rimuovi"
-          aria-label="Rimuovi turno"
+          onClick={handleDeleteClick}
+          className={`rounded p-0.5 transition-colors ${
+            confirmDelete
+              ? "bg-red-500 text-white hover:bg-red-600"
+              : "hover:bg-red-500/30"
+          }`}
+          title={confirmDelete ? "Clicca per confermare" : "Rimuovi"}
+          aria-label={confirmDelete ? "Conferma rimozione turno" : "Rimuovi turno"}
         >
-          ×
+          {confirmDelete ? "✓" : "×"}
         </button>
       </div>
     </div>

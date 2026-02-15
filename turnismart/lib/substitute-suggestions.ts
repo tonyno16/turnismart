@@ -11,6 +11,7 @@ import {
 } from "@/drizzle/schema";
 import { getEmployeeWeekShifts } from "./schedules";
 import { validateShiftAssignment } from "./schedule-validation";
+import { parseTimeMinutes } from "./time-utils";
 
 export type SubstituteSuggestion = {
   id: string;
@@ -20,11 +21,6 @@ export type SubstituteSuggestion = {
   shiftsThisWeek: number;
   preferredLocation: boolean;
 };
-
-function parseTimeMinutes(t: string): number {
-  const [h, m] = t.split(":").map(Number);
-  return (h ?? 0) * 60 + (m ?? 0);
-}
 
 export async function findBestSubstitutes(params: {
   organizationId: string;

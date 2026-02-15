@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { shiftMinutesInWeek } from "@/lib/schedule-utils";
 
@@ -132,6 +132,20 @@ export const EmployeeSidebar = memo(function EmployeeSidebar({
     return map;
   }, [shifts, weekStart]);
 
+  const empRoleNames = useMemo(() => {
+    if (!roles || !employeeRoleIds) return new Map<string, string>();
+    const roleMap = new Map(roles.map((r) => [r.id, r.name]));
+    const result = new Map<string, string>();
+    for (const emp of employees) {
+      const names = (employeeRoleIds[emp.id] ?? [])
+        .map((rid) => roleMap.get(rid))
+        .filter(Boolean)
+        .join(", ");
+      result.set(emp.id, names);
+    }
+    return result;
+  }, [employees, roles, employeeRoleIds]);
+
   const { empShiftCounts, equityByEmp } = useMemo(() => {
     const counts = new Map<string, number>();
     for (const s of shifts) {
@@ -158,6 +172,19 @@ export const EmployeeSidebar = memo(function EmployeeSidebar({
     };
   }, [shifts, employees]);
 
+  const [search, setSearch] = useState("");
+
+  const visibleEmployees = useMemo(() => {
+    if (!search.trim()) return employees;
+    const q = search.toLowerCase();
+    return employees.filter(
+      (e) =>
+        e.first_name.toLowerCase().includes(q) ||
+        e.last_name.toLowerCase().includes(q) ||
+        `${e.first_name} ${e.last_name}`.toLowerCase().includes(q)
+    );
+  }, [employees, search]);
+
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">
@@ -166,30 +193,43 @@ export const EmployeeSidebar = memo(function EmployeeSidebar({
       <p className="text-xs text-zinc-500">
         Trascina su una cella per assegnare
       </p>
+      {/* Ricerca dipendenti */}
+      <div className="relative">
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Cerca dipendente..."
+          className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 pr-7 text-sm placeholder:text-zinc-400 dark:border-zinc-600 dark:bg-zinc-800 dark:placeholder:text-zinc-500"
+        />
+        {search && (
+          <button
+            type="button"
+            onClick={() => setSearch("")}
+            className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            aria-label="Cancella ricerca"
+          >
+            ×
+          </button>
+        )}
+      </div>
       <div className="mt-2 space-y-2">
-        {employees.length === 0 ? (
-          <p className="text-xs text-zinc-500">Nessun risultato per i filtri selezionati</p>
+        {visibleEmployees.length === 0 ? (
+          <p className="text-xs text-zinc-500">
+            {search ? "Nessun dipendente trovato" : "Nessun risultato per i filtri selezionati"}
+          </p>
         ) : (
-          employees.map((emp) => {
-            const roleNames =
-              roles && employeeRoleIds
-                ? (employeeRoleIds[emp.id] ?? [])
-                    .map((rid) => roles.find((r) => r.id === rid)?.name)
-                    .filter(Boolean)
-                    .join(", ") || ""
-                : "";
-            return (
+          visibleEmployees.map((emp) => (
               <EmployeeCard
                 key={emp.id}
                 employee={emp}
-                roleNames={roleNames}
+                roleNames={empRoleNames.get(emp.id) ?? ""}
                 weekMinutes={empMinutes.get(emp.id) ?? 0}
                 weeklyHours={emp.weekly_hours}
                 shiftCount={empShiftCounts.get(emp.id) ?? 0}
                 equityBadge={equityByEmp.get(emp.id) ?? null}
               />
-            );
-          })
+            ))
         )}
       </div>
     </div>
