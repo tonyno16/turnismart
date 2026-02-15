@@ -2,17 +2,30 @@
 
 import { revalidatePath } from "next/cache";
 import { requireOrganization } from "@/lib/auth";
-import { getWeekSchedule } from "@/lib/schedules";
+import {
+  getWeekSchedule,
+  getPeriodTimesForOrganization,
+  getExistingShiftsForWeek,
+  existingShiftsToFixed,
+} from "@/lib/schedules";
 import { checkQuota, incrementUsage } from "@/lib/usage";
 import {
   collectSchedulingConstraints,
   generateScheduleWithAI,
   saveGeneratedShifts,
+  getInfeasibleSuggestions,
 } from "@/lib/ai-schedule";
+import {
+  generateScheduleWithORTools,
+  type OrtoolsResult,
+} from "@/lib/schedule-ortools";
 
 export type GenerateResult =
-  | { ok: true; saved: number; skipped: number; errors: string[] }
+  | { ok: true; saved: number; skipped: number; errors: string[]; method?: "ortools" | "ai" }
   | { ok: false; error: string };
+
+/** Feature flag: usa OR-Tools come primary (default true). */
+const USE_ORTOOLS = process.env.USE_ORTOOLS !== "false";
 
 export async function generateScheduleWithAIAction(
   weekStart: string,
@@ -38,17 +51,42 @@ export async function generateScheduleWithAIAction(
       return { ok: false, error: "Nessun fabbisogno configurato per le sedi" };
     }
 
-    const generated = await generateScheduleWithAI(organization.id, constraints, weekStart);
+    const periodTimes = await getPeriodTimesForOrganization(organization.id);
+    let generated: { employeeId: string; locationId: string; roleId: string; dayOfWeek: number; period: string }[] = [];
+    let method: "ortools" | "ai" = "ai";
 
-    if (mode === "fill_gaps") {
-      const existingCount = 0;
-      if (existingCount > 0) {
-        return {
-          ok: false,
-          error:
-            "Modalità 'Riempi gap' non ancora supportata. Usa 'Genera tutto'.",
-        };
+    const fixedAssignments =
+      mode === "fill_gaps"
+        ? existingShiftsToFixed(
+            await getExistingShiftsForWeek(schedule.id, weekStart),
+            weekStart
+          )
+        : [];
+
+    if (USE_ORTOOLS) {
+      const ortoolsResult: OrtoolsResult = await generateScheduleWithORTools({
+        constraints,
+        weekStart,
+        periodTimes,
+        fixedAssignments,
+      });
+
+      if (ortoolsResult.status === "optimal" || ortoolsResult.status === "feasible") {
+        generated = ortoolsResult.shifts;
+        method = "ortools";
+      } else if (ortoolsResult.status === "infeasible") {
+        const suggestion = await getInfeasibleSuggestions(
+          constraints,
+          ortoolsResult.infeasibleReason
+        );
+        return { ok: false, error: suggestion };
+      } else if (ortoolsResult.status === "error") {
+        return { ok: false, error: ortoolsResult.error };
       }
+    }
+
+    if (generated.length === 0) {
+      generated = await generateScheduleWithAI(organization.id, constraints, weekStart);
     }
 
     const result = await saveGeneratedShifts(
@@ -68,6 +106,7 @@ export async function generateScheduleWithAIAction(
       saved: result.saved,
       skipped: result.skipped,
       errors: result.errors,
+      method,
     };
   } catch (e) {
     return {

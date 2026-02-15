@@ -40,6 +40,8 @@ export const ShiftCard = memo(function ShiftCard({
   onDuplicate: (shiftId: string, targetDate: string) => void;
 }) {
   const [activePopover, setActivePopover] = useState<ActivePopover>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const confirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [startDraft, setStartDraft] = useState(shift.start_time.slice(0, 5));
   const [endDraft, setEndDraft] = useState(shift.end_time.slice(0, 5));
   const [noteDraft, setNoteDraft] = useState(shift.notes ?? "");
@@ -47,6 +49,26 @@ export const ShiftCard = memo(function ShiftCard({
 
   const closePopover = useCallback(() => setActivePopover(null), []);
   useClickOutside(cardRef, closePopover, activePopover !== null);
+
+  // Reset confirm-delete timer on unmount
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    };
+  }, []);
+
+  const handleDeleteClick = useCallback(() => {
+    if (confirmDelete) {
+      // Second click → actually delete
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+      setConfirmDelete(false);
+      onDelete(shift.id);
+    } else {
+      // First click → enter confirm mode (3s timeout)
+      setConfirmDelete(true);
+      confirmTimerRef.current = setTimeout(() => setConfirmDelete(false), 3000);
+    }
+  }, [confirmDelete, onDelete, shift.id]);
 
   useEffect(() => {
     setNoteDraft(shift.notes ?? "");
@@ -260,12 +282,16 @@ export const ShiftCard = memo(function ShiftCard({
           </svg>
         </button>
         <button
-          onClick={() => onDelete(shift.id)}
-          className="rounded p-0.5 hover:bg-red-500/30"
-          title="Rimuovi"
-          aria-label="Rimuovi turno"
+          onClick={handleDeleteClick}
+          className={`rounded p-0.5 transition-colors ${
+            confirmDelete
+              ? "bg-red-500 text-white hover:bg-red-600"
+              : "hover:bg-red-500/30"
+          }`}
+          title={confirmDelete ? "Clicca per confermare" : "Rimuovi"}
+          aria-label={confirmDelete ? "Conferma rimozione turno" : "Rimuovi turno"}
         >
-          ×
+          {confirmDelete ? "✓" : "×"}
         </button>
       </div>
     </div>

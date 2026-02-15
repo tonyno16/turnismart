@@ -16,7 +16,7 @@ import {
 import { format, addWeeks, addDays, parseISO } from "date-fns";
 import { it } from "date-fns/locale";
 import { toast } from "sonner";
-import { createShift, deleteShift, publishSchedule, updateShift, updateShiftNotes, duplicateShift } from "@/app/actions/shifts";
+import { createShift, deleteShift, deleteAllShifts, publishSchedule, updateShift, updateShiftNotes, duplicateShift } from "@/app/actions/shifts";
 import { EmployeeSidebar } from "@/components/schedule/employee-sidebar";
 import { SchedulerFilters, type SchedulerFiltersState } from "@/components/schedule/scheduler-filters";
 
@@ -182,6 +182,7 @@ export function SchedulerClient({
   const [viewMode, setViewMode] = useState<"location" | "employee" | "role">("location");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
   const gridScrollRef = useRef<HTMLDivElement>(null);
@@ -647,6 +648,13 @@ export function SchedulerClient({
                     >
                       Genera con AI
                     </button>
+                    <button
+                      onClick={() => { setShowDeleteAll(true); setActionsOpen(false); }}
+                      disabled={pending || stats.totalShifts === 0}
+                      className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30 disabled:opacity-50"
+                    >
+                      Elimina tutti i turni
+                    </button>
                   </div>
                 )}
               </div>
@@ -672,6 +680,13 @@ export function SchedulerClient({
                   className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
                 >
                   PDF
+                </button>
+                <button
+                  onClick={() => setShowDeleteAll(true)}
+                  disabled={pending || stats.totalShifts === 0}
+                  className="rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950/30 disabled:opacity-50"
+                >
+                  Elimina tutti
                 </button>
                 <button
                   onClick={() => setActiveModal("ai")}
@@ -746,6 +761,44 @@ export function SchedulerClient({
             = dipendente assegnato a ruolo non suo
           </span>
         </div>
+
+        {/* Empty state — nessun turno nella settimana */}
+        {stats.totalShifts === 0 && (
+          <div className="mt-4 flex flex-col items-center gap-3 rounded-xl border-2 border-dashed border-zinc-300 bg-zinc-50/50 px-6 py-10 text-center dark:border-zinc-600 dark:bg-zinc-800/30">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-10 w-10 text-zinc-400">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+            </svg>
+            <p className="text-base font-medium text-zinc-700 dark:text-zinc-300">
+              Nessun turno programmato per questa settimana
+            </p>
+            <p className="text-sm text-zinc-500">
+              Trascina un dipendente dalla sidebar, oppure usa un metodo rapido:
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <button
+                onClick={() => setActiveModal("replicate")}
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-700"
+              >
+                Replica settimana prec.
+              </button>
+              <button
+                onClick={() => setActiveModal("applyTemplate")}
+                className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-700"
+              >
+                Applica template
+              </button>
+              <button
+                onClick={() => setActiveModal("ai")}
+                className="flex items-center gap-1.5 rounded-lg border border-[hsl(var(--primary))] px-3 py-2 text-sm font-medium text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/10"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                  <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z" />
+                </svg>
+                Genera con AI
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="relative mt-2 flex min-h-0 flex-1 overflow-auto [-webkit-overflow-scrolling:touch]">
           {/* Toggle dipendenti su mobile/tablet (< lg) */}
@@ -1316,6 +1369,7 @@ export function SchedulerClient({
       {activeModal === "ai" && (
         <AIGenerationModal
           weekStart={weekStart}
+          existingShiftCount={shifts.filter((s) => s.status === "active").length}
           onClose={() => setActiveModal(null)}
         />
       )}
@@ -1379,6 +1433,50 @@ export function SchedulerClient({
           pending={pending}
           confirmLabel="Salva comunque"
         />
+      )}
+      {/* Modal conferma elimina tutti i turni */}
+      {showDeleteAll && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="mx-4 w-full max-w-sm rounded-xl bg-white p-6 shadow-xl dark:bg-zinc-800">
+            <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+              Elimina tutti i turni
+            </h3>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              Eliminare tutti i <strong>{stats.totalShifts} turni</strong> della settimana{" "}
+              {format(parseISO(weekStart), "d MMM", { locale: it })} –{" "}
+              {format(addDays(parseISO(weekStart), 6), "d MMM yyyy", { locale: it })}?
+            </p>
+            <p className="mt-1 text-xs text-red-500">
+              Questa azione non è reversibile.
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setShowDeleteAll(false)}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium hover:bg-zinc-100 dark:border-zinc-600 dark:hover:bg-zinc-700"
+              >
+                Annulla
+              </button>
+              <button
+                onClick={() => {
+                  setShowDeleteAll(false);
+                  startTransition(async () => {
+                    try {
+                      const { deleted } = await deleteAllShifts(schedule.id);
+                      toast.success(`${deleted} turni eliminati`);
+                      router.refresh();
+                    } catch (err) {
+                      toast.error(err instanceof Error ? err.message : "Errore eliminazione");
+                    }
+                  });
+                }}
+                disabled={pending}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                Elimina tutti
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
