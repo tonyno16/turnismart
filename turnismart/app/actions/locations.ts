@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { dailyTableExists } from "@/lib/daily-table-check";
 import {
   locations,
   staffingRequirements,
@@ -285,6 +286,9 @@ export async function getDailyStaffingForMonth(
   locationId: string,
   month: string // "YYYY-MM"
 ) {
+  // Return empty if migration 0023 hasn't been applied yet
+  if (!(await dailyTableExists())) return [];
+
   const { organization } = await requireOrganization();
   const [loc] = await db
     .select()
@@ -333,6 +337,12 @@ export async function updateDailyStaffingOverrides(
     requiredCount: number;
   }>
 ) {
+  if (!(await dailyTableExists())) {
+    throw new Error(
+      "Tabella fabbisogno giornaliero non trovata. Esegui: npm run db:migrate"
+    );
+  }
+
   const { organization } = await requireOrganization();
   const [loc] = await db
     .select()

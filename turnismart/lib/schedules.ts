@@ -2,6 +2,7 @@ import { eq, and, gte, lte } from "drizzle-orm";
 import { format, addDays, startOfWeek, parseISO, getISODay } from "date-fns";
 import { db } from "@/lib/db";
 import { parseTimeMinutes } from "@/lib/time-utils";
+import { dailyTableExists } from "@/lib/daily-table-check";
 import {
   schedules,
   shifts,
@@ -411,9 +412,10 @@ export async function getStaffingCoverage(
   const weekEndDate = weekDates[6];
 
   // 3. Fetch daily overrides for these 7 dates (all org locations)
+  // Skipped entirely if migration 0023 hasn't been applied yet
   const orgLocationIds = [...new Set(reqs.map((r) => r.location_id))];
   let overrideMap = new Map<string, number>(); // key: locId_roleId_dayOfWeek_period
-  if (orgLocationIds.length > 0) {
+  if (orgLocationIds.length > 0 && (await dailyTableExists())) {
     const overrides = await db
       .select({
         location_id: dailyStaffingOverrides.location_id,
@@ -531,19 +533,24 @@ export type WeekStats = {
 
 export async function getWeekStats(
   organizationId: string,
-  weekStart: string
+  weekStart: string,
+  scheduleId?: string
 ): Promise<WeekStats> {
-  const [sched] = await db
-    .select({ id: schedules.id })
-    .from(schedules)
-    .where(
-      and(
-        eq(schedules.organization_id, organizationId),
-        eq(schedules.week_start_date, weekStart)
+  let schedId = scheduleId;
+  if (!schedId) {
+    const [sched] = await db
+      .select({ id: schedules.id })
+      .from(schedules)
+      .where(
+        and(
+          eq(schedules.organization_id, organizationId),
+          eq(schedules.week_start_date, weekStart)
+        )
       )
-    )
-    .limit(1);
-  if (!sched) {
+      .limit(1);
+    schedId = sched?.id;
+  }
+  if (!schedId) {
     return { totalShifts: 0, totalHours: 0, employeesScheduled: 0 };
   }
 
@@ -555,7 +562,7 @@ export async function getWeekStats(
     })
     .from(shifts)
     .where(
-      and(eq(shifts.schedule_id, sched.id), eq(shifts.status, "active"))
+      and(eq(shifts.schedule_id, schedId), eq(shifts.status, "active"))
   );
 
   let totalMinutes = 0;

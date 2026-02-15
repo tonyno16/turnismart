@@ -2,6 +2,7 @@ import { eq, and, gte, lte } from "drizzle-orm";
 import { addDays, format, parseISO } from "date-fns";
 import OpenAI from "openai";
 import { db } from "@/lib/db";
+import { dailyTableExists } from "@/lib/daily-table-check";
 import {
   locations,
   staffingRequirements,
@@ -83,39 +84,41 @@ export async function collectSchedulingConstraints(
     .where(eq(locations.organization_id, organizationId));
 
   // Daily overrides for this week take priority over weekly template
+  // Skipped if migration 0023 hasn't been applied yet
   const weekStartDate = parseISO(weekStart);
   const weekDates: string[] = Array.from({ length: 7 }, (_, i) =>
     format(addDays(weekStartDate, i), "yyyy-MM-dd")
   );
   const weekEndDate = weekDates[6];
 
-  const dailyOverrides = await db
-    .select({
-      location_id: dailyStaffingOverrides.location_id,
-      role_id: dailyStaffingOverrides.role_id,
-      date: dailyStaffingOverrides.date,
-      shift_period: dailyStaffingOverrides.shift_period,
-      required_count: dailyStaffingOverrides.required_count,
-    })
-    .from(dailyStaffingOverrides)
-    .innerJoin(locations, eq(dailyStaffingOverrides.location_id, locations.id))
-    .where(
-      and(
-        eq(locations.organization_id, organizationId),
-        gte(dailyStaffingOverrides.date, weekStart),
-        lte(dailyStaffingOverrides.date, weekEndDate)
-      )
-    );
-
-  // Build override map: locId_roleId_dayOfWeek_period → required_count
   const overrideMap = new Map<string, number>();
-  for (const o of dailyOverrides) {
-    const dayIdx = weekDates.indexOf(o.date);
-    if (dayIdx >= 0) {
-      overrideMap.set(
-        `${o.location_id}_${o.role_id}_${dayIdx}_${o.shift_period}`,
-        o.required_count
+  if (await dailyTableExists()) {
+    const dailyOverrides = await db
+      .select({
+        location_id: dailyStaffingOverrides.location_id,
+        role_id: dailyStaffingOverrides.role_id,
+        date: dailyStaffingOverrides.date,
+        shift_period: dailyStaffingOverrides.shift_period,
+        required_count: dailyStaffingOverrides.required_count,
+      })
+      .from(dailyStaffingOverrides)
+      .innerJoin(locations, eq(dailyStaffingOverrides.location_id, locations.id))
+      .where(
+        and(
+          eq(locations.organization_id, organizationId),
+          gte(dailyStaffingOverrides.date, weekStart),
+          lte(dailyStaffingOverrides.date, weekEndDate)
+        )
       );
+
+    for (const o of dailyOverrides) {
+      const dayIdx = weekDates.indexOf(o.date);
+      if (dayIdx >= 0) {
+        overrideMap.set(
+          `${o.location_id}_${o.role_id}_${dayIdx}_${o.shift_period}`,
+          o.required_count
+        );
+      }
     }
   }
 
