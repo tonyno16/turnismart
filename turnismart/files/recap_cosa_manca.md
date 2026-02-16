@@ -33,7 +33,11 @@
 
 **Codice:** ✅ Implementato
 
-- [ ] `npx trigger.dev deploy` (serve `TRIGGER_SECRET_KEY`)
+**Deploy (su Windows il deploy locale fallisce per path con spazi – usare GitHub Actions):**
+- [ ] Creare Personal Access Token su [cloud.trigger.dev/account/tokens](https://cloud.trigger.dev/account/tokens)
+- [ ] Aggiungere secret `TRIGGER_ACCESS_TOKEN` in GitHub → Settings → Secrets and variables → Actions
+- [ ] Push su `main` (o avviare manualmente workflow "Deploy Trigger.dev") → deploy automatico
+- [ ] In Vercel/local: impostare `TRIGGER_SECRET_KEY` (chiave prod da dashboard Trigger.dev)
 - [ ] Test: upload CSV da pagina Dipendenti → verificare completamento
 
 ---
