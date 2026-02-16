@@ -1,5 +1,6 @@
 import { defineConfig } from "@trigger.dev/sdk/v3";
 
+// Trigger.dev config - deploy via GitHub integration
 export default defineConfig({
   project: "proj_tbydpvusmvdkqgxnzvpv",
   runtime: "node",
