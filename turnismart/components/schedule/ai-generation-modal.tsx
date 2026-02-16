@@ -19,6 +19,7 @@ export function AIGenerationModal({
     skipped?: number;
     errors?: string[];
     error?: string;
+    method?: "ortools" | "ai";
   } | null>(null);
 
   const handleGenerate = () => {
@@ -55,6 +56,7 @@ export function AIGenerationModal({
               <>
                 <p className="font-medium">
                   Completato: {result.saved} turni assegnati
+                  {result.method === "ortools" && " (ottimizzato con OR-Tools)"}
                   {result.skipped && result.skipped > 0
                     ? `, ${result.skipped} saltati`
                     : ""}

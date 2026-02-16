@@ -347,6 +347,30 @@ export async function getEmployeeWeekShifts(
     .orderBy(shifts.date, shifts.start_time);
 }
 
+/** Get all active shifts for a schedule in a given week (for fill_gaps fixed assignments). */
+export async function getExistingShiftsForWeek(scheduleId: string, weekStart: string) {
+  const weekStartDate = parseISO(weekStart);
+  const weekEnd = format(addDays(weekStartDate, 6), "yyyy-MM-dd");
+  return db
+    .select({
+      employee_id: shifts.employee_id,
+      location_id: shifts.location_id,
+      role_id: shifts.role_id,
+      date: shifts.date,
+      start_time: shifts.start_time,
+    })
+    .from(shifts)
+    .where(
+      and(
+        eq(shifts.schedule_id, scheduleId),
+        eq(shifts.status, "active"),
+        gte(shifts.date, weekStart),
+        lte(shifts.date, weekEnd)
+      )
+    )
+    .orderBy(shifts.date, shifts.start_time);
+}
+
 /** Get employee shifts with location/role names for My Schedule view */
 export async function getEmployeeWeekShiftsWithDetails(
   employeeId: string,

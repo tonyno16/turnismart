@@ -269,6 +269,31 @@ export async function collectSchedulingConstraints(
   };
 }
 
+/** Converte turni esistenti nel formato fixed per OR-Tools (fill_gaps). */
+export function existingShiftsToFixed(
+  existing: Array<{ employee_id: string; location_id: string; role_id: string; date: string; start_time: string }>,
+  weekStart: string
+): GeneratedShift[] {
+  const weekStartDate = parseISO(weekStart);
+  const parseTimeMinutes = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return (h ?? 0) * 60 + (m ?? 0);
+  };
+  return existing.map((s) => {
+    const d = parseISO(s.date);
+    const dayOfWeek = Math.floor((d.getTime() - weekStartDate.getTime()) / (24 * 60 * 60 * 1000));
+    const startM = parseTimeMinutes(s.start_time);
+    const period = startM < 14 * 60 ? "morning" : "evening";
+    return {
+      employeeId: s.employee_id,
+      locationId: s.location_id,
+      roleId: s.role_id,
+      dayOfWeek,
+      period,
+    };
+  });
+}
+
 export type GeneratedShift = {
   employeeId: string;
   locationId: string;
