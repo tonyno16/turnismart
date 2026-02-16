@@ -495,20 +495,6 @@ export function SchedulerClient({
     [router, startTransition, dispatchOptimistic]
   );
 
-  const handleDeleteAllShifts = useCallback(() => {
-    if (
-      !confirm(
-        "Sei sicuro di eliminare tutti i turni di questa settimana? Potrai rifarli da zero."
-      )
-    )
-      return;
-    startTransition(async () => {
-      await deleteAllShifts(schedule.id);
-      toast.success("Tutti i turni sono stati eliminati");
-      router.refresh();
-    });
-  }, [schedule.id, router, startTransition]);
-
   const handleFindSubstitute = useCallback(
     (s: { id: string; date: string; location_name: string; role_name: string; employee_name: string }) =>
       setSickLeaveShift(s),
@@ -750,14 +736,6 @@ export function SchedulerClient({
                     <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1H2a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2Z" />
                   </svg>
                   AI
-                </button>
-                <button
-                  onClick={handleDeleteAllShifts}
-                  disabled={pending || stats.totalShifts === 0}
-                  className="rounded-lg border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20 disabled:opacity-50"
-                  title="Elimina tutti i turni della settimana"
-                >
-                  Elimina tutti
                 </button>
               </div>
             </div>
