@@ -3,6 +3,7 @@ import Papa from "papaparse";
 import { createClient } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 import { getDb } from "./db";
+import type { ContractType } from "../drizzle/schema";
 import {
   importJobs,
   employees,
@@ -32,7 +33,7 @@ export const createEmployeeRecords = task({
 
     for (let i = 0; i < payload.validRows.length; i++) {
       const row = payload.validRows[i];
-        const rowNum = Number((row as any)._row) || i + 2;
+        const rowNum = Number((row as Record<string, unknown>)._row) || i + 2;
       try {
         const roleName = (row.role || "").trim();
         const roleId = roleName ? payload.roleNameToId[roleName.toLowerCase()] : null;
@@ -47,8 +48,9 @@ export const createEmployeeRecords = task({
             phone: (row.phone || "").trim() || null,
             contract_type: (() => {
               const key = (row.contract_type || "full_time").toLowerCase().replace(/\s/g, "_").replace(/-/g, "_");
-              return CONTRACT_MAP[key] && (contractTypes as readonly string[]).includes(CONTRACT_MAP[key])
-                ? (CONTRACT_MAP[key] as any)
+              const mapped = CONTRACT_MAP[key];
+              return mapped && (contractTypes as readonly string[]).includes(mapped)
+                ? (mapped as ContractType)
                 : "full_time";
             })(),
             weekly_hours: parseInt(row.weekly_hours || "40", 10) || 40,
@@ -108,8 +110,7 @@ export const csvImportWorkflow = task({
       organizationId: string;
       filePath: string;
       fileName: string;
-    },
-    { ctx }
+    }
   ) => {
     const db = getDb();
     const supabase = createClient(
@@ -199,7 +200,7 @@ export const csvImportWorkflow = task({
           const val = headers[idx] ? raw[headers[idx]] : undefined;
           row[target] = val != null ? String(val).trim() : "";
         }
-        (row as any)._row = rowNum;
+        (row as Record<string, string | number>)._row = rowNum;
 
         const firstName = row.first_name || "";
         const lastName = row.last_name || "";
@@ -229,7 +230,7 @@ export const csvImportWorkflow = task({
         }
         if (email) existingEmails.add(emailNorm);
         if (phone) existingPhones.add(phoneNorm);
-        validRows.push(row as any);
+        validRows.push(row as Record<string, string> & { _row?: number });
       }
 
       const invalidPct = (errors.length + skipped) / Math.max(1, parsed.data.length);

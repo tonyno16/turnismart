@@ -26,7 +26,7 @@ function createChainableMock(resolvedValue: unknown = []) {
   }
 
   // The chain is also thenable (await resolves to the value)
-  (chain as any).then = (resolve: (v: unknown) => void) =>
+  (chain as Record<string, unknown>).then = (resolve: (v: unknown) => void) =>
     resolve(resolvedValue);
 
   return chain;

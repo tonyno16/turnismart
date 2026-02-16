@@ -211,5 +211,6 @@ export async function findBestSubstitutes(params: {
   }
 
   scored.sort((a, b) => b._rawScore - a._rawScore);
-  return scored.slice(0, limit).map(({ _rawScore, ...s }) => s);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- omit _rawScore from returned objects
+  return scored.slice(0, limit).map(({ _rawScore: _, ...s }) => s);
 }

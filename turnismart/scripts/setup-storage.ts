@@ -24,7 +24,7 @@ async function ensureBucket(name: string, options: { public?: boolean } = {}) {
     return;
   }
 
-  const { data, error } = await supabase.storage.createBucket(name, {
+  const { error } = await supabase.storage.createBucket(name, {
     public: options.public ?? false,
   });
 

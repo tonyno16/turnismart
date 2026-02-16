@@ -1,7 +1,6 @@
 import { eq, and, gte, lte, isNull } from "drizzle-orm";
 import { format, addDays, startOfWeek, parseISO, getISODay } from "date-fns";
 import { db } from "@/lib/db";
-import { parseTimeMinutes } from "@/lib/time-utils";
 import { dailyTableExists } from "@/lib/daily-table-check";
 import {
   schedules,
@@ -482,7 +481,7 @@ export async function getStaffingCoverage(
   // 3. Fetch daily overrides for these 7 dates (all org locations)
   // Skipped entirely if migration 0023 hasn't been applied yet
   const orgLocationIds = [...new Set(reqs.map((r) => r.location_id))];
-  let overrideMap = new Map<string, number>(); // key: locId_roleId_dayOfWeek_period
+  const overrideMap = new Map<string, number>(); // key: locId_roleId_dayOfWeek_period
   if (orgLocationIds.length > 0 && (await dailyTableExists())) {
     const overrides = await db
       .select({

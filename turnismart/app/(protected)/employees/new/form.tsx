@@ -18,6 +18,7 @@ const CONTRACT_OPTIONS = [
 
 export function NewEmployeeForm({
   roles,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- parent passes for future preferred-location field
   locations,
 }: {
   roles: Role[];

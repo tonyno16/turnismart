@@ -1,14 +1,12 @@
-import { eq, and, gte, lte } from "drizzle-orm";
-import { format, addDays, addWeeks, parseISO, startOfWeek } from "date-fns";
+import { eq, and } from "drizzle-orm";
+import { format, addDays, parseISO, startOfWeek } from "date-fns";
 import { db } from "@/lib/db";
 import {
   schedules,
   shifts,
-  staffingRequirements,
   employees,
   locations,
   shiftRequests,
-  employeeTimeOff,
 } from "@/drizzle/schema";
 import { getStaffingCoverage } from "./schedules";
 
@@ -183,7 +181,6 @@ export async function getPendingAlerts(
 ): Promise<PendingAlert[]> {
   const week =
     weekStart ?? format(startOfWeek(new Date(), { weekStartsOn: 1 }), "yyyy-MM-dd");
-  const weekEnd = format(addDays(parseISO(week), 6), "yyyy-MM-dd");
   const alerts: PendingAlert[] = [];
 
   const pendingRequests = await db

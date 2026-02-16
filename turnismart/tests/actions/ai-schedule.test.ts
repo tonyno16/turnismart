@@ -94,7 +94,7 @@ describe("generateScheduleWithAIAction", () => {
     const result = await generateScheduleWithAIAction("2025-01-06");
 
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("Nessun dipendente");
+    if (!result.ok) expect(result.error).toContain("Nessun dipendente");
     expect(mockGenerateScheduleWithAI).not.toHaveBeenCalled();
   });
 
@@ -107,7 +107,7 @@ describe("generateScheduleWithAIAction", () => {
     const result = await generateScheduleWithAIAction("2025-01-06");
 
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("Nessun fabbisogno");
+    if (!result.ok) expect(result.error).toContain("Nessun fabbisogno");
     expect(mockGenerateScheduleWithAI).not.toHaveBeenCalled();
   });
 
@@ -117,7 +117,7 @@ describe("generateScheduleWithAIAction", () => {
     const result = await generateScheduleWithAIAction("2025-01-06");
 
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("Limite");
+    if (!result.ok) expect(result.error).toContain("Limite");
     expect(mockCollectConstraints).not.toHaveBeenCalled();
   });
 

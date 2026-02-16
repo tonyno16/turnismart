@@ -36,7 +36,7 @@ export const staffingRequirements = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (t) => [
+  () => [
     // Vincoli univoci parziali gestiti in migrazione 0022
   ]
 );

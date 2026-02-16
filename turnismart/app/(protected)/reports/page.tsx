@@ -6,7 +6,7 @@ import { it } from "date-fns/locale";
 import { ReportsGenerateForm } from "./reports-generate-form";
 
 export default async function ReportsPage() {
-  const { organization } = await requireOrganization();
+  await requireOrganization();
   const reportsList = await getReportsList();
 
   const months = Array.from({ length: 12 }, (_, i) => {

@@ -74,7 +74,6 @@ export type SignupTrend = {
 
 export async function getSignupTrend(days = 14): Promise<SignupTrend[]> {
   const start = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const startStr = start.toISOString().slice(0, 10);
 
   const rows = await db
     .select({

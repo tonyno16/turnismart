@@ -86,8 +86,11 @@ export async function generateScheduleWithORTools(options: {
     options.fixedAssignments ?? []
   );
 
-  const serviceUrl = process.env.ORTOOLS_SERVICE_URL?.trim();
+  let serviceUrl = process.env.ORTOOLS_SERVICE_URL?.trim();
   if (serviceUrl) {
+    if (!serviceUrl.startsWith("http://") && !serviceUrl.startsWith("https://")) {
+      serviceUrl = `https://${serviceUrl}`;
+    }
     const url = `${serviceUrl.replace(/\/$/, "")}/solve`;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 35000);
@@ -99,25 +102,45 @@ export async function generateScheduleWithORTools(options: {
         signal: controller.signal,
       });
       clearTimeout(timeout);
-      const result = (await res.json()) as {
-        status: string;
-        shifts?: GeneratedShift[];
-        error?: string;
-        infeasibleReason?: string;
-      };
+
+      const text = await res.text();
+      let result: { status?: string; shifts?: GeneratedShift[]; error?: string; infeasibleReason?: string; detail?: string | { msg?: string }[] };
+      try {
+        result = JSON.parse(text) as typeof result;
+      } catch {
+        return {
+          status: "error",
+          error: res.ok
+            ? "Risposta non valida dal solver"
+            : `Solver non raggiungibile (${res.status}): ${text.slice(0, 150) || res.statusText}`,
+        };
+      }
+
+      if (!res.ok) {
+        const detailMsg =
+          typeof result.detail === "string"
+            ? result.detail
+            : Array.isArray(result.detail)
+              ? (result.detail[0] as { msg?: string } | undefined)?.msg
+              : undefined;
+        const msg = detailMsg || result.error || res.statusText || `Errore HTTP ${res.status}`;
+        return { status: "error", error: msg };
+      }
+
       if (result.status === "optimal" || result.status === "feasible") {
         return { status: result.status as "optimal" | "feasible", shifts: result.shifts ?? [] };
       }
       if (result.status === "infeasible") {
         return { status: "infeasible", infeasibleReason: result.infeasibleReason ?? "Problema infattibile" };
       }
-      return { status: "error", error: result.error ?? "Errore sconosciuto dal solver" };
-    } catch (e) {
-      clearTimeout(timeout);
       return {
         status: "error",
-        error: e instanceof Error ? e.message : "Chiamata al solver fallita",
+        error: result.error || (typeof result.detail === "string" ? result.detail : undefined) || "Errore sconosciuto dal solver",
       };
+    } catch (e) {
+      clearTimeout(timeout);
+      const msg = e instanceof Error ? e.message : "Chiamata al solver fallita";
+      return { status: "error", error: msg };
     }
   }
 

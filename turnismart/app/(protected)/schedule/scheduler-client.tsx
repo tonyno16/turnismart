@@ -8,7 +8,6 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
-  useDraggable,
   useDroppable,
   type DragEndEvent,
   type DragStartEvent,
@@ -373,6 +372,7 @@ export function SchedulerClient({
           return { locationId: loc.id, locationName: loc.name, roleId: role.id, roleName: role.name, locationIndex: locIndex, hasUncovered };
         })
         .filter((r) => r.hasUncovered)
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- destructure to omit hasUncovered
         .map(({ hasUncovered: _, ...r }) => r)
     );
   }, [locations, roles, deferredFilters.onlyUncovered, coverageIndex, shiftIndex, weekDates]);

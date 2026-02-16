@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { roles, roleShiftTimes, DAY_ALL } from "@/drizzle/schema";
 import { getPeriodTimesForOrganization } from "./schedules";

@@ -73,9 +73,8 @@ export async function generateScheduleWithAIAction(
         method = "ortools";
       } else if (ortoolsResult.status === "infeasible") {
         return { ok: false, error: ortoolsResult.infeasibleReason };
-      } else if (ortoolsResult.status === "error") {
-        return { ok: false, error: ortoolsResult.error };
       }
+      /* status === "error": fallback silenzioso ad AI (solver non raggiungibile, timeout, ecc.) */
     }
 
     if (generated.length === 0) {

@@ -2,8 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { completeStep1 } from "@/app/actions/onboarding";
-import { SECTOR_ROLES } from "@/lib/onboarding/sector-roles";
-
 const SECTORS = [
   { id: "ristorante", label: "Ristorante", desc: "Camerieri, cuochi, lavapiatti..." },
   { id: "bar", label: "Bar", desc: "Barista, cameriere" },

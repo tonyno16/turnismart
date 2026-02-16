@@ -36,7 +36,7 @@ export function Step3Staffing({
   };
 
   useEffect(() => {
-    loadData();
+    queueMicrotask(() => loadData());
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {

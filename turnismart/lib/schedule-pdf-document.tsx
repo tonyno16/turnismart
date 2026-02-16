@@ -47,9 +47,6 @@ export function SchedulePDFByLocation({
   locations: { id: string; name: string }[];
 }) {
   const start = parseISO(weekStart);
-  const weekDates = Array.from({ length: 7 }, (_, i) =>
-    format(addDays(start, i), "yyyy-MM-dd")
-  );
 
   return (
     <Document>

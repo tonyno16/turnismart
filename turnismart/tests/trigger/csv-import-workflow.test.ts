@@ -67,7 +67,7 @@ describe("createEmployeeRecords task", () => {
       jobId: "job1",
       organizationId: "org1",
       validRows: [
-        { first_name: "Mario", last_name: "Rossi", email: "mario@test.com", role: "Commesso", _row: 2 },
+        { first_name: "Mario", last_name: "Rossi", email: "mario@test.com", role: "Commesso", _row: 2 } as unknown as Record<string, string>,
       ],
       roleNameToId: { commesso: "role-1" },
     });
@@ -89,7 +89,7 @@ describe("createEmployeeRecords task", () => {
       jobId: "job1",
       organizationId: "org1",
       validRows: [
-        { first_name: "Mario", last_name: "Rossi", _row: 2 },
+        { first_name: "Mario", last_name: "Rossi", _row: 2 } as unknown as Record<string, string>,
       ],
       roleNameToId: {},
     });

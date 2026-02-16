@@ -39,7 +39,7 @@ vi.mock("@/lib/schedules", () => ({
   ]),
 }));
 
-import { saveGeneratedShifts, generateScheduleWithAI } from "@/lib/ai-schedule";
+import { saveGeneratedShifts } from "@/lib/ai-schedule";
 
 beforeEach(() => {
   vi.clearAllMocks();

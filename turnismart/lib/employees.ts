@@ -1,4 +1,4 @@
-import { eq, and, or, inArray, ilike, sql } from "drizzle-orm";
+import { eq, and, or, inArray, ilike } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
   employees,
@@ -161,6 +161,7 @@ export async function getEmployeeDetail(employeeId: string) {
 /** Returns employee's contract weekly hours. Phase 5 scheduler will extend to sum scheduled hours per week. */
 export async function getEmployeeWeeklyHours(
   employeeId: string,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- reserved for future week-scoped calculation
   _weekStart?: string
 ): Promise<{ weekly: number; max: number } | null> {
   const [emp] = await db

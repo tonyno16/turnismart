@@ -119,6 +119,11 @@ export default async function ProfilePage() {
           Limiti del piano {PLAN_LABELS[planInfo.plan] ?? planInfo.plan}
         </p>
         <div className="mt-4 space-y-4">
+          {process.env.NODE_ENV === "development" && (
+            <p className=" rounded bg-amber-100 px-2 py-1 text-xs text-amber-800 dark:bg-zinc-700 dark:text-amber-200">
+              Org ID: {organization.id} | Unlimited: {hasUnlimitedAi(organization.id) ? "✅ sì" : "❌ no"}
+            </p>
+          )}
           <QuotaBar used={usage.locations_count} limit={limits.locations} label="Sedi" />
           <QuotaBar used={usage.employees_count} limit={limits.employees} label="Dipendenti" />
           <QuotaBar used={usage.ai_generations_count} limit={limits.aiGenerations} label="Generazioni AI (mese)" />

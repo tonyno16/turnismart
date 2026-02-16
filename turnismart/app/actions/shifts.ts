@@ -4,16 +4,9 @@ import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { addDays, subDays, format, parseISO } from "date-fns";
 import { db } from "@/lib/db";
-import {
-  schedules,
-  shifts,
-  employees,
-  employeeRoles,
-  locations,
-  roles,
-} from "@/drizzle/schema";
+import { schedules, shifts, employees } from "@/drizzle/schema";
 import { requireOrganization } from "@/lib/auth";
-import { getWeekSchedule, getWeekStart, getPeriodTimesForRole } from "@/lib/schedules";
+import { getWeekStart, getPeriodTimesForRole } from "@/lib/schedules";
 import { dispatchSchedulePublishedNotifications } from "@/lib/notifications";
 import {
   validateShiftAssignment,

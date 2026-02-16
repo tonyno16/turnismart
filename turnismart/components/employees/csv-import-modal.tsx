@@ -35,9 +35,11 @@ export function CsvImportModal({
 
   useEffect(() => {
     if (!open) return;
-    setError(null);
-    setJobId(null);
-    setStatus(null);
+    queueMicrotask(() => {
+      setError(null);
+      setJobId(null);
+      setStatus(null);
+    });
   }, [open]);
 
   useEffect(() => {

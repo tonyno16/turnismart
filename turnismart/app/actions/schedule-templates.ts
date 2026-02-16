@@ -68,7 +68,6 @@ export async function createScheduleTemplate(
           .where(inArray(staffingRequirements.location_id, locationIds))
       : [];
 
-  const weekStart = parseISO(sched.week_start_date);
 
   const templateShifts = shiftRows.map((s) => {
     const d = parseISO(s.date);

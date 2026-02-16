@@ -8,7 +8,6 @@ import {
   shifts,
   employees,
   locations,
-  roles,
   italianHolidays,
   employeeTimeOff,
   employeeRoles,
@@ -362,10 +361,8 @@ export async function generateReportExcel(aggregate: ReportAggregate): Promise<B
 export async function generateReportPdf(aggregate: ReportAggregate): Promise<Buffer> {
   const { renderToBuffer } = await import("@react-pdf/renderer");
   const { ReportPDFDocument } = await import("./report-pdf-document");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const buf = await renderToBuffer(
-    ReportPDFDocument({ aggregate }) as any
-  );
+  const doc = ReportPDFDocument({ aggregate });
+  const buf = await renderToBuffer(doc as Parameters<typeof renderToBuffer>[0]);
   return Buffer.from(buf);
 }
 

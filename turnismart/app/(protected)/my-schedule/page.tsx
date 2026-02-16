@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getEmployeeForUser } from "@/lib/auth";
 import { requireUser } from "@/lib/auth";
 import { getEmployeeWeekShiftsWithDetails, getWeekStart } from "@/lib/schedules";

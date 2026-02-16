@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 function chainableMock(resolvedValue: unknown = []) {
-  const chain: Record<string, any> = {};
+  const chain: Record<string, unknown> = {};
   const methods = [
     "select", "from", "where", "limit", "orderBy",
     "innerJoin", "leftJoin", "insert", "values",
@@ -114,8 +114,10 @@ describe("duplicateShift", () => {
 
     const result = await duplicateShift("s1", "2025-01-07");
     expect(result.ok).toBe(false);
-    expect(result.error).toContain("Sovrapposizione");
-    expect(result.conflict?.type).toBe("overlap");
+    if (!result.ok) {
+      expect(result.error).toContain("Sovrapposizione");
+      expect(result.conflict?.type).toBe("overlap");
+    }
     expect(mockDb.insert).not.toHaveBeenCalled();
   });
 

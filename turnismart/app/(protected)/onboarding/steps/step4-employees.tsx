@@ -28,18 +28,15 @@ export function Step4Employees({
   ]);
 
   useEffect(() => {
-    getOnboardingData().then((d) => setRoles(d.roles));
-  }, []);
-
-  useEffect(() => {
-    if (roles.length && rows.some((r) => !r.roleId)) {
+    getOnboardingData().then((d) => {
+      setRoles(d.roles);
       setRows((r) =>
         r.map((row) =>
-          !row.roleId ? { ...row, roleId: roles[0]!.id } : row
+          !row.roleId && d.roles[0] ? { ...row, roleId: d.roles[0].id } : row
         )
       );
-    }
-  }, [roles]);
+    });
+  }, []);
 
   const addRow = () => {
     setRows((r) => [

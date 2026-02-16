@@ -30,6 +30,7 @@ const CONTRACT_OPTIONS = [
 
 export function EmployeeProfileForm({
   employee,
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars -- parent passes for future role selector */
   roles,
   locations,
 }: {

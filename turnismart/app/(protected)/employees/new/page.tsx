@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireOrganization } from "@/lib/auth";
 import { getOnboardingData } from "@/app/actions/onboarding";

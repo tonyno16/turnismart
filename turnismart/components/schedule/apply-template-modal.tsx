@@ -19,6 +19,7 @@ export function ApplyTemplateModal({
   const [templates, setTemplates] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState("");
+  const effectiveSelectedId = selectedId || templates[0]?.id || "";
 
   useEffect(() => {
     listScheduleTemplates()
@@ -27,14 +28,10 @@ export function ApplyTemplateModal({
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => {
-    if (templates.length > 0 && !selectedId) setSelectedId(templates[0].id);
-  }, [templates, selectedId]);
-
   const handleApply = () => {
-    if (!selectedId) return;
+    if (!effectiveSelectedId) return;
     startTransition(async () => {
-      const result = await applyScheduleTemplate(selectedId, weekStart);
+      const result = await applyScheduleTemplate(effectiveSelectedId, weekStart);
       if (!result.ok) {
         toast.error(result.error);
         return;
@@ -75,7 +72,7 @@ export function ApplyTemplateModal({
           </p>
         ) : (
           <select
-            value={selectedId}
+            value={effectiveSelectedId}
             onChange={(e) => setSelectedId(e.target.value)}
             className="mt-1 w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
             disabled={pending}
@@ -102,7 +99,7 @@ export function ApplyTemplateModal({
           <button
             type="button"
             onClick={handleApply}
-            disabled={pending || !selectedId || templates.length === 0}
+            disabled={pending || !effectiveSelectedId || templates.length === 0}
             className="rounded-lg bg-[hsl(var(--primary))] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
             {pending ? "Applicazione..." : "Applica"}

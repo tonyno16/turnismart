@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 function chainableMock(resolvedValue: unknown = []) {
-  const chain: Record<string, any> = {};
+  const chain: Record<string, unknown> = {};
   const methods = [
     "select", "from", "where", "limit", "orderBy",
     "innerJoin", "leftJoin", "insert", "values",

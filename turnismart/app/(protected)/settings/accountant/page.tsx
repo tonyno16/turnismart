@@ -3,7 +3,7 @@ import { getLinkedAccountants } from "@/app/actions/accountant";
 import { AccountantInviteForm } from "./accountant-invite-form";
 
 export default async function AccountantSettingsPage() {
-  const { organization } = await requireOrganization();
+  await requireOrganization();
   const linked = await getLinkedAccountants();
 
   return (

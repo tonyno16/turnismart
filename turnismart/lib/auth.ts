@@ -11,13 +11,6 @@ import type { User } from "@supabase/supabase-js";
 
 const TRIAL_DAYS = 30;
 
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "");
-}
-
 function isUniqueViolation(e: unknown): boolean {
   const err = (e && typeof e === "object" && "cause" in e ? (e as { cause?: unknown }).cause : e) as { code?: string } | null;
   return err != null && typeof err === "object" && err.code === "23505";
@@ -109,14 +102,14 @@ export const getCurrentUser = cache(async () => {
         (authUser.user_metadata?.full_name as string) ||
         authUser.email?.split("@")[0] ||
         "La mia attività";
-      let org = await provisionOrganization(name, authUser.email ?? undefined);
+      const org = await provisionOrganization(name, authUser.email ?? undefined);
       await provisionUser(authUser, org.id);
       [appUser] = await db
         .select()
         .from(users)
         .where(eq(users.id, authUser.id))
         .limit(1);
-    } catch (e) {
+    } catch {
       // Race or duplicate: refetch by auth id (another request may have created it)
       [appUser] = await db
         .select()

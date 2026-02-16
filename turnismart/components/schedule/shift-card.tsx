@@ -71,13 +71,15 @@ export const ShiftCard = memo(function ShiftCard({
   }, [confirmDelete, onDelete, shift.id]);
 
   useEffect(() => {
-    setNoteDraft(shift.notes ?? "");
+    queueMicrotask(() => setNoteDraft(shift.notes ?? ""));
   }, [shift.notes]);
 
   useEffect(() => {
     if (activePopover === "times") {
-      setStartDraft(shift.start_time.slice(0, 5));
-      setEndDraft(shift.end_time.slice(0, 5));
+      queueMicrotask(() => {
+        setStartDraft(shift.start_time.slice(0, 5));
+        setEndDraft(shift.end_time.slice(0, 5));
+      });
     }
   }, [activePopover, shift.start_time, shift.end_time]);
 

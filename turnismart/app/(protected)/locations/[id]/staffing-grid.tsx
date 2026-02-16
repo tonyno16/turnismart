@@ -73,15 +73,15 @@ export function LocationStaffingGrid({
   useEffect(() => {
     if (viewMode === "week") {
       if (isTemplate) {
-        setStaffing(initialStaffing);
+        queueMicrotask(() => setStaffing(initialStaffing));
       } else {
-        loadWeekStaffing(weekStart);
+        queueMicrotask(() => loadWeekStaffing(weekStart));
       }
     }
   }, [weekStart, viewMode]);
 
   useEffect(() => {
-    if (isTemplate) setStaffing(initialStaffing);
+    if (isTemplate) queueMicrotask(() => setStaffing(initialStaffing));
   }, [isTemplate, initialStaffing]);
 
   useEffect(() => {
@@ -103,7 +103,7 @@ export function LocationStaffingGrid({
     for (const s of staffing) {
       v[`${s.role_id}_${s.day_of_week}_${s.shift_period}`] = s.required_count;
     }
-    setValues(v);
+    queueMicrotask(() => setValues(v));
   }, [staffing]);
 
   const handleSaveWeek = () => {

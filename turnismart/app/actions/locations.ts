@@ -16,7 +16,9 @@ import {
 import { requireOrganization } from "@/lib/auth";
 import { checkQuota } from "@/lib/usage";
 
+/** Used for type and validation. @see ShiftPeriod */
 const SHIFT_PERIODS = ["morning", "evening"] as const;
+type ShiftPeriod = (typeof SHIFT_PERIODS)[number];
 
 export async function createLocation(formData: FormData) {
   const { organization } = await requireOrganization();
@@ -182,11 +184,12 @@ export async function updateStaffingRequirements(
 
   for (const u of updates) {
     if (u.requiredCount > 0) {
+      if (!SHIFT_PERIODS.includes(u.shiftPeriod as ShiftPeriod)) continue;
       await db.insert(staffingRequirements).values({
         location_id: locationId,
         role_id: u.roleId,
         day_of_week: u.dayOfWeek,
-        shift_period: u.shiftPeriod as (typeof SHIFT_PERIODS)[number],
+        shift_period: u.shiftPeriod as ShiftPeriod,
         required_count: u.requiredCount,
         week_start_date: weekStartDate ?? null,
       });

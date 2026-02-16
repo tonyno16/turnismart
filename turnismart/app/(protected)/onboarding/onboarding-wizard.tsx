@@ -11,6 +11,7 @@ import { Step5Summary } from "./steps/step5-summary";
 const STEPS = 5;
 
 export function OnboardingWizard({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- parent passes for future use
   organizationId,
   sector,
   initialStep = 1,
