@@ -119,6 +119,15 @@ export async function incrementUsage(
 
 export type QuotaResource = "locations" | "employees" | "ai_generations" | "reports";
 
+/** Restituisce true se l'organizzazione ha generazioni AI illimitate (whitelist UNLIMITED_AI_ORG_IDS) */
+export function hasUnlimitedAi(organizationId: string): boolean {
+  const ids = (process.env.UNLIMITED_AI_ORG_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return ids.includes(organizationId);
+}
+
 export type QuotaCheckResult = {
   allowed: boolean;
   used: number;
@@ -158,17 +167,24 @@ export async function checkQuota(
             ? `Limite dipendenti raggiunto (${limits.employees}). Passa a un piano superiore.`
             : undefined,
       };
-    case "ai_generations":
+    case "ai_generations": {
+      const unlimitedOrgIds = (process.env.UNLIMITED_AI_ORG_IDS ?? "")
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean);
+      const hasUnlimited = unlimitedOrgIds.includes(organizationId);
+
       return {
-        allowed: usage.ai_generations_count < limits.aiGenerations,
+        allowed: hasUnlimited || usage.ai_generations_count < limits.aiGenerations,
         used: usage.ai_generations_count,
-        limit: limits.aiGenerations,
+        limit: hasUnlimited ? 999999 : limits.aiGenerations,
         plan,
         message:
-          usage.ai_generations_count >= limits.aiGenerations
+          !hasUnlimited && usage.ai_generations_count >= limits.aiGenerations
             ? `Limite generazioni AI mensili raggiunto (${limits.aiGenerations}). Passa a un piano superiore.`
             : undefined,
       };
+    }
     case "reports":
       return {
         allowed: usage.reports_generated_count < limits.reports,

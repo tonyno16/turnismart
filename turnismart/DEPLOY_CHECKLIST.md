@@ -24,6 +24,7 @@ Verifica questi punti prima del deploy in produzione.
 | `RESEND_API_KEY` | API key Resend |
 | `RESEND_FROM_EMAIL` | Email mittente verificata (dominio verificato in Resend) |
 | `CRON_SECRET` | Stringa casuale per proteggere `/api/cron/monthly-report` |
+| `UNLIMITED_AI_ORG_IDS` | (opzionale) UUID organizzazioni con generazioni AI illimitate, separati da virgola |
 
 - [ ] Nessuna chiave di **test** (Stripe test mode, Twilio sandbox) usata in produzione
 - [ ] `NEXT_PUBLIC_*` contiene solo dati non sensibili (URL, chiavi pubbliche)

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireOrganization } from "@/lib/auth";
-import { getOrCreateMonthlyUsage } from "@/lib/usage";
+import { getOrCreateMonthlyUsage, hasUnlimitedAi } from "@/lib/usage";
 import { getOrganizationPlan } from "@/lib/stripe";
 import { format } from "date-fns";
 import { it } from "date-fns/locale";
@@ -43,10 +43,11 @@ export default async function ProfilePage() {
     getOrganizationPlan(organization.id),
   ]);
 
+  const baseAiLimit = planInfo.plan === "trial" ? 10 : planInfo.plan === "starter" ? 5 : planInfo.plan === "pro" ? 20 : 50;
   const limits = {
     locations: planInfo.plan === "trial" ? 3 : planInfo.plan === "starter" ? 2 : planInfo.plan === "pro" ? 5 : 20,
     employees: planInfo.plan === "trial" ? 15 : planInfo.plan === "starter" ? 10 : planInfo.plan === "pro" ? 25 : 100,
-    aiGenerations: planInfo.plan === "trial" ? 10 : planInfo.plan === "starter" ? 5 : planInfo.plan === "pro" ? 20 : 50,
+    aiGenerations: hasUnlimitedAi(organization.id) ? 999999 : baseAiLimit,
     reports: planInfo.plan === "trial" ? 5 : planInfo.plan === "starter" ? 3 : planInfo.plan === "pro" ? 10 : 999,
   };
 
