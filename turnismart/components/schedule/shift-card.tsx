@@ -29,6 +29,8 @@ export const ShiftCard = memo(function ShiftCard({
   onUpdateNotes,
   onUpdateTimes,
   onDuplicate,
+  onOpenNotesEdit,
+  onOpenTimesEdit,
 }: {
   shift: ShiftForCard;
   weekStart: string;
@@ -38,6 +40,8 @@ export const ShiftCard = memo(function ShiftCard({
   onUpdateNotes: (id: string, notes: string | null) => void;
   onUpdateTimes?: (id: string, startTime: string, endTime: string) => void;
   onDuplicate: (shiftId: string, targetDate: string) => void;
+  onOpenNotesEdit?: (shift: ShiftForCard) => void;
+  onOpenTimesEdit?: (shift: ShiftForCard) => void;
 }) {
   const [activePopover, setActivePopover] = useState<ActivePopover>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -46,9 +50,14 @@ export const ShiftCard = memo(function ShiftCard({
   const [endDraft, setEndDraft] = useState(shift.end_time.slice(0, 5));
   const [noteDraft, setNoteDraft] = useState(shift.notes ?? "");
   const cardRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+
+  const useModalForNotes = !!onOpenNotesEdit;
+  const useModalForTimes = !!onOpenTimesEdit;
 
   const closePopover = useCallback(() => setActivePopover(null), []);
-  useClickOutside(cardRef, closePopover, activePopover !== null);
+  const listenClickOutside = activePopover === "duplicate";
+  useClickOutside([cardRef, popoverRef], closePopover, listenClickOutside);
 
   // Reset confirm-delete timer on unmount
   useEffect(() => {
@@ -138,7 +147,11 @@ export const ShiftCard = memo(function ShiftCard({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                setActivePopover(activePopover === "times" ? null : "times");
+                if (useModalForTimes) {
+                  onOpenTimesEdit?.(shift);
+                } else {
+                  setActivePopover(activePopover === "times" ? null : "times");
+                }
               }}
               className="rounded p-0.5 hover:bg-[hsl(var(--primary))]/30"
               title="Modifica orari"
@@ -146,8 +159,9 @@ export const ShiftCard = memo(function ShiftCard({
             >
               <Clock className="h-3.5 w-3.5" />
             </button>
-            {activePopover === "times" && (
+            {!useModalForTimes && activePopover === "times" && (
               <div
+                ref={popoverRef}
                 className="absolute left-0 top-full z-50 mt-1 w-40 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
                 onClick={(e) => e.stopPropagation()}
               >
@@ -193,7 +207,11 @@ export const ShiftCard = memo(function ShiftCard({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              setActivePopover(activePopover === "notes" ? null : "notes");
+              if (useModalForNotes) {
+                onOpenNotesEdit?.(shift);
+              } else {
+                setActivePopover(activePopover === "notes" ? null : "notes");
+              }
             }}
             className="rounded p-0.5 hover:bg-[hsl(var(--primary))]/30"
             title="Note"
@@ -201,8 +219,9 @@ export const ShiftCard = memo(function ShiftCard({
           >
             <FileText className="h-3.5 w-3.5" />
           </button>
-          {activePopover === "notes" && (
+          {!useModalForNotes && activePopover === "notes" && (
             <div
+              ref={popoverRef}
               className="absolute left-0 top-full z-50 mt-1 w-48 rounded-lg border border-zinc-200 bg-white p-2 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
               onClick={(e) => e.stopPropagation()}
             >
@@ -248,6 +267,7 @@ export const ShiftCard = memo(function ShiftCard({
           </button>
           {activePopover === "duplicate" && (
             <div
+              ref={popoverRef}
               className="absolute right-0 top-full z-50 mt-1 w-36 rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-800"
               onClick={(e) => e.stopPropagation()}
             >

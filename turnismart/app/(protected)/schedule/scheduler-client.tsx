@@ -40,6 +40,7 @@ const SickLeavePopup = dynamic(
   { ssr: false }
 );
 import { ShiftCard } from "@/components/schedule/shift-card";
+import { ShiftEditModal } from "@/components/schedule/shift-edit-modal";
 
 const ExportPdfModal = dynamic(
   () => import("@/components/schedule/export-pdf-modal").then((m) => ({ default: m.ExportPdfModal })),
@@ -182,6 +183,11 @@ export function SchedulerClient({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [actionsOpen, setActionsOpen] = useState(false);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
+  type ShiftEditData = Pick<Shift, "id" | "employee_name" | "date" | "start_time" | "end_time" | "notes">;
+  const [editingShift, setEditingShift] = useState<{
+    type: "notes" | "times";
+    shift: ShiftEditData;
+  } | null>(null);
   const [isMounted, setIsMounted] = useState(false);
   const actionsRef = useRef<HTMLDivElement>(null);
   const gridScrollRef = useRef<HTMLDivElement>(null);
@@ -547,6 +553,14 @@ export function SchedulerClient({
     },
     [router, startTransition]
   );
+
+  const handleOpenNotesEdit = useCallback((shift: Pick<Shift, "id" | "employee_name" | "date" | "start_time" | "end_time" | "notes">) => {
+    setEditingShift({ type: "notes", shift });
+  }, []);
+
+  const handleOpenTimesEdit = useCallback((shift: Pick<Shift, "id" | "employee_name" | "date" | "start_time" | "end_time" | "notes">) => {
+    setEditingShift({ type: "times", shift });
+  }, []);
 
   const isEmpty = locations.length === 0 || employees.length === 0;
 
@@ -985,6 +999,8 @@ export function SchedulerClient({
                                               onUpdateNotes={handleUpdateNotes}
                                               onUpdateTimes={handleUpdateTimes}
                                               onDuplicate={handleDuplicateShift}
+                                              onOpenNotesEdit={handleOpenNotesEdit}
+                                              onOpenTimesEdit={handleOpenTimesEdit}
                                             />
                                           );
                                         })
@@ -1046,6 +1062,8 @@ export function SchedulerClient({
                                         onUpdateNotes={handleUpdateNotes}
                                         onUpdateTimes={handleUpdateTimes}
                                         onDuplicate={handleDuplicateShift}
+                                        onOpenNotesEdit={handleOpenNotesEdit}
+                                        onOpenTimesEdit={handleOpenTimesEdit}
                                       />
                                     );
                                   })
@@ -1416,6 +1434,20 @@ export function SchedulerClient({
           confirmLabel="Salva comunque"
         />
       )}
+      {editingShift && (
+        <ShiftEditModal
+          type={editingShift.type}
+          shiftId={editingShift.shift.id}
+          employeeName={editingShift.shift.employee_name}
+          date={editingShift.shift.date}
+          startTime={editingShift.shift.start_time}
+          endTime={editingShift.shift.end_time}
+          notes={editingShift.shift.notes ?? null}
+          onClose={() => setEditingShift(null)}
+          onSaveNotes={handleUpdateNotes}
+          onSaveTimes={(id, start, end) => handleUpdateTimes(id, start, end)}
+        />
+      )}
       {/* Modal conferma elimina tutti i turni */}
       {showDeleteAll && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
@@ -1479,6 +1511,8 @@ const ShiftCell = memo(function ShiftCell({
   onUpdateNotes,
   onUpdateTimes,
   onDuplicate,
+  onOpenNotesEdit,
+  onOpenTimesEdit,
   as: Wrapper = "td",
 }: {
   locationId: string;
@@ -1495,6 +1529,8 @@ const ShiftCell = memo(function ShiftCell({
   onUpdateNotes: (id: string, notes: string | null) => void;
   onUpdateTimes?: (shiftId: string, startTime: string, endTime: string) => void;
   onDuplicate: (shiftId: string, targetDate: string) => void;
+  onOpenNotesEdit?: (shift: Pick<Shift, "id" | "employee_name" | "date" | "start_time" | "end_time" | "notes">) => void;
+  onOpenTimesEdit?: (shift: Pick<Shift, "id" | "employee_name" | "date" | "start_time" | "end_time" | "notes">) => void;
   as?: "td" | "div";
 }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -1523,6 +1559,8 @@ const ShiftCell = memo(function ShiftCell({
               onUpdateNotes={onUpdateNotes}
               onUpdateTimes={onUpdateTimes}
               onDuplicate={onDuplicate}
+              onOpenNotesEdit={onOpenNotesEdit}
+              onOpenTimesEdit={onOpenTimesEdit}
             />
           );
         })}

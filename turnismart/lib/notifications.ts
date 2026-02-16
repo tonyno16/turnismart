@@ -15,13 +15,21 @@ import { sendEmail } from "./resend";
 import { sendWhatsApp, isWhatsAppConfigured } from "./twilio";
 
 function formatShiftSummary(
-  items: Array<{ date: string; start_time: string; end_time: string; location_name: string; role_name: string }>
+  items: Array<{
+    date: string;
+    start_time: string;
+    end_time: string;
+    location_name: string;
+    role_name: string;
+    notes?: string | null;
+  }>
 ): string {
   return items
-    .map(
-      (s) =>
-        `${format(parseISO(s.date), "EEE d MMM", { locale: it })} ${s.start_time}-${s.end_time} @ ${s.location_name} (${s.role_name})`
-    )
+    .map((s) => {
+      const base = `${format(parseISO(s.date), "EEE d MMM", { locale: it })} ${s.start_time}-${s.end_time} @ ${s.location_name} (${s.role_name})`;
+      const notesLine = s.notes?.trim() ? `\n  📝 ${s.notes.trim()}` : "";
+      return base + notesLine;
+    })
     .join("\n");
 }
 
@@ -76,6 +84,7 @@ export async function dispatchSchedulePublishedNotifications(params: {
       end_time: shifts.end_time,
       location_name: locations.name,
       role_name: roles.name,
+      notes: shifts.notes,
     })
     .from(shifts)
     .innerJoin(locations, eq(shifts.location_id, locations.id))
@@ -96,6 +105,7 @@ export async function dispatchSchedulePublishedNotifications(params: {
       end_time: string;
       location_name: string;
       role_name: string;
+      notes?: string | null;
     }>
   >();
   for (const s of shiftsRows) {
@@ -106,6 +116,7 @@ export async function dispatchSchedulePublishedNotifications(params: {
       end_time: s.end_time,
       location_name: s.location_name,
       role_name: s.role_name,
+      notes: s.notes,
     });
     byEmployee.set(s.employee_id, list);
   }
